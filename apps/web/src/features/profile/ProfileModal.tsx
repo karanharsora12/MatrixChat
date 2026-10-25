@@ -13,6 +13,7 @@ import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Switch } from '../../components/ui/switch';
 import { Combobox } from '../../components/ui/combobox';
+import { modal } from '../../components/ui/modal';
 import { User as UserIcon, Shield, Check, RefreshCw, Lock, Globe, Users } from 'lucide-react';
 
 interface ProfileModalProps {
@@ -88,7 +89,7 @@ export function ProfileModal({ isOpen, onClose, currentUser, onUserUpdated }: Pr
       setSuccessMsg('Profile updated successfully!');
       setTimeout(() => setSuccessMsg(null), 3000);
     } catch (err: any) {
-      alert(err.message || 'Failed to update profile');
+      modal.error(err.message || 'Failed to update profile');
     } finally {
       setSaving(false);
     }
@@ -102,7 +103,7 @@ export function ProfileModal({ isOpen, onClose, currentUser, onUserUpdated }: Pr
       setSuccessMsg('Privacy preference saved.');
       setTimeout(() => setSuccessMsg(null), 2000);
     } catch (err: any) {
-      alert(err.message || 'Failed to update privacy settings');
+      modal.error(err.message || 'Failed to update privacy settings');
     }
   };
 
@@ -113,7 +114,7 @@ export function ProfileModal({ isOpen, onClose, currentUser, onUserUpdated }: Pr
         <DialogHeader className="px-5 py-4 border-b border-border/50 bg-muted/40">
           <DialogTitle className="text-base font-bold flex items-center gap-2">
             <UserIcon className="w-5 h-5 text-[#00a884]" />
-            <span>Profile & Settings</span>
+            <span>My Profile & Settings</span>
           </DialogTitle>
         </DialogHeader>
 

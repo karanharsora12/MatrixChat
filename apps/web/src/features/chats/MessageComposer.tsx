@@ -1,28 +1,35 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Message } from '../../types';
-import { Button } from '../../components/ui/button';
-import { Tooltip, TooltipTrigger, TooltipContent } from '../../components/ui/tooltip';
+import React, { useState, useRef, useEffect } from "react";
+import { Message } from "../../types";
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+} from "../../components/ui/tooltip";
 import {
   Paperclip,
-  Send,
   X,
   RefreshCw,
   FileText,
   Smile,
-  Mic,
-} from 'lucide-react';
-import { api } from '../../services/api';
-import { socketService } from '../../services/socket';
+  Image as ImageIcon,
+  FileUp,
+} from "lucide-react";
+import { api } from "../../services/api";
+import { socketService } from "../../services/socket";
+import { EmojiPicker } from "../../components/emoji";
+import { modal } from "../../components/ui/modal";
 
 interface MessageComposerProps {
   conversationId: string;
   replyingTo: Message | null;
   onCancelReply: () => void;
-  onSendMessage: (content: string, replyToId?: string | null, attachment?: any) => Promise<void>;
+  onSendMessage: (
+    content: string,
+    replyToId?: string | null,
+    attachment?: any,
+    messageType?: "text" | "image" | "file",
+  ) => Promise<void>;
 }
-
-// Quick popular emojis list for WhatsApp style inline emoji picker
-const QUICK_EMOJIS = ['👍', '❤️', '😂', '🔥', '🙏', '😊', '🎉', '👏', '✨', '👋'];
 
 export function MessageComposer({
   conversationId,
@@ -30,22 +37,26 @@ export function MessageComposer({
   onCancelReply,
   onSendMessage,
 }: MessageComposerProps) {
-  const [content, setContent] = useState('');
+  const [content, setContent] = useState("");
   const [isUploading, setIsUploading] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
+
   const [attachmentPreview, setAttachmentPreview] = useState<{
     file: File;
     previewUrl?: string;
   } | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Auto-resize textarea smoothly matching WhatsApp
+  // Auto-resize textarea
   useEffect(() => {
     if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = "auto";
       textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`;
     }
   }, [content]);
@@ -61,24 +72,39 @@ export function MessageComposer({
     }, 2000);
   };
 
+  // Cursor-aware emoji insertion
   const handleAddEmoji = (emoji: string) => {
-    setContent((prev) => prev + emoji);
-    setShowEmojiPicker(false);
-    textareaRef.current?.focus();
+    if (textareaRef.current) {
+      const textarea = textareaRef.current;
+      const start = textarea.selectionStart ?? content.length;
+      const end = textarea.selectionEnd ?? content.length;
+      const nextContent = content.slice(0, start) + emoji + content.slice(end);
+      setContent(nextContent);
+
+      setTimeout(() => {
+        textarea.focus();
+        textarea.setSelectionRange(start + emoji.length, start + emoji.length);
+      }, 0);
+    } else {
+      setContent((prev) => prev + emoji);
+    }
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 10 * 1024 * 1024) {
-      alert('File size exceeds the 10MB limit.');
+    if (file.size > 15 * 1024 * 1024) {
+      modal.warning("File size exceeds the 15MB limit.", "File Too Large");
       return;
     }
 
-    const previewUrl = file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined;
+    const previewUrl = file.type.startsWith("image/")
+      ? URL.createObjectURL(file)
+      : undefined;
     setAttachmentPreview({ file, previewUrl });
-    if (fileInputRef.current) fileInputRef.current.value = '';
+    setShowAttachmentMenu(false);
+    if (e.target) e.target.value = "";
   };
 
   const handleSend = async (e?: React.FormEvent) => {
@@ -87,38 +113,44 @@ export function MessageComposer({
 
     try {
       let uploadedAttachment = null;
+      let messageType: "text" | "image" | "file" = "text";
 
       if (attachmentPreview) {
         setIsUploading(true);
         const uploadRes = await api.uploadFile(attachmentPreview.file);
         uploadedAttachment = uploadRes.file;
+        messageType = attachmentPreview.file.type.startsWith("image/")
+          ? "image"
+          : "file";
       }
 
       await onSendMessage(
         content.trim(),
         replyingTo ? replyingTo.id : null,
-        uploadedAttachment
+        uploadedAttachment,
+        messageType,
       );
 
-      setContent('');
+      setContent("");
       setAttachmentPreview(null);
       setShowEmojiPicker(false);
+      setShowAttachmentMenu(false);
       onCancelReply();
       socketService.stopTyping(conversationId);
 
       if (textareaRef.current) {
-        textareaRef.current.style.height = 'auto';
+        textareaRef.current.style.height = "auto";
         textareaRef.current.focus();
       }
     } catch (err: any) {
-      alert(err.message || 'Failed to send message');
+      modal.error(err.message || "Failed to send message");
     } finally {
       setIsUploading(false);
     }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSend();
     }
@@ -127,163 +159,241 @@ export function MessageComposer({
   const hasContent = content.trim().length > 0 || attachmentPreview !== null;
 
   return (
-    <div className="bg-[#f0f2f5] dark:bg-[#202c33] border-t border-black/5 dark:border-white/5 px-4 py-2.5 z-20 flex-shrink-0 select-none relative">
-      {/* Quick Emojis Bar Popup */}
+    <div className="relative select-none w-full">
+      {/* Click-outside dismissal backdrop */}
+      {(showEmojiPicker || showAttachmentMenu) && (
+        <div
+          className="fixed inset-0 z-40"
+          onClick={() => {
+            setShowEmojiPicker(false);
+            setShowAttachmentMenu(false);
+          }}
+        />
+      )}
+
+      {/* Emoji Picker Popover */}
       {showEmojiPicker && (
-        <div className="absolute left-4 bottom-16 bg-white dark:bg-[#233138] border border-border shadow-xl rounded-2xl p-2.5 flex items-center gap-1.5 z-30 animate-in fade-in-0 zoom-in-95">
-          {QUICK_EMOJIS.map((emoji) => (
-            <button
-              key={emoji}
-              type="button"
-              onClick={() => handleAddEmoji(emoji)}
-              className="text-xl p-1.5 hover:scale-125 hover:bg-muted/50 rounded-lg transition-transform cursor-pointer"
-            >
-              {emoji}
-            </button>
-          ))}
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setShowEmojiPicker(false)}
-            className="h-7 w-7 rounded-full text-muted-foreground ml-1"
+        <div className="absolute left-0 bottom-[calc(100%+10px)] z-50 animate-in fade-in-0 zoom-in-95 duration-150">
+          <EmojiPicker
+            onSelectEmoji={handleAddEmoji}
+            onClose={() => setShowEmojiPicker(false)}
+            width={340}
+            height={400}
+          />
+        </div>
+      )}
+
+      {/* WhatsApp Speed Dial Attachment Menu */}
+      {showAttachmentMenu && (
+        <div className="absolute left-10 sm:left-12 bottom-[calc(100%+10px)] z-50 bg-white dark:bg-[#233138] rounded-2xl shadow-2xl border border-black/10 dark:border-white/10 p-2 min-w-[200px] animate-in fade-in-0 slide-in-from-bottom-2 duration-150">
+          <button
+            type="button"
+            onClick={() => imageInputRef.current?.click()}
+            className="w-full flex items-center gap-3.5 px-3 py-2.5 rounded-xl hover:bg-[#f0f2f5] dark:hover:bg-[#182229] transition-colors text-left group"
           >
-            <X className="w-3.5 h-3.5" />
-          </Button>
+            <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-[#ac44cf] to-[#e06df6] flex items-center justify-center text-white shadow-md group-hover:scale-105 transition-transform flex-shrink-0">
+              <ImageIcon className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-[14px] font-medium text-[#111b21] dark:text-[#e9edef] leading-tight">
+                Photos & Videos
+              </p>
+              <p className="text-[11px] text-[#667781] dark:text-[#8696a0]">
+                Images, videos
+              </p>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="w-full flex items-center gap-3.5 px-3 py-2.5 rounded-xl hover:bg-[#f0f2f5] dark:hover:bg-[#182229] transition-colors text-left group"
+          >
+            <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-[#5f66cd] to-[#8087f7] flex items-center justify-center text-white shadow-md group-hover:scale-105 transition-transform flex-shrink-0">
+              <FileUp className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-[14px] font-medium text-[#111b21] dark:text-[#e9edef] leading-tight">
+                Document
+              </p>
+              <p className="text-[11px] text-[#667781] dark:text-[#8696a0]">
+                PDF, DOCX, ZIP
+              </p>
+            </div>
+          </button>
         </div>
       )}
 
       {/* Replying Context Bar */}
       {replyingTo && (
-        <div className="flex items-center justify-between px-3.5 py-2 mb-2 bg-white/90 dark:bg-[#182229]/90 rounded-xl border-l-4 border-[#00a884] text-xs shadow-sm animate-in fade-in-0 slide-in-from-bottom-2">
+        <div className="flex items-center justify-between px-3.5 py-2 mb-2 bg-white dark:bg-[#182229] rounded-[8px] border-l-[3.5px] border-[#00a884] text-xs shadow-sm animate-in fade-in-0 slide-in-from-bottom-2 duration-150">
           <div className="min-w-0 pr-2">
-            <span className="font-semibold text-[#00a884] block mb-0.5">Replying to message</span>
-            <p className="text-muted-foreground truncate">{replyingTo.content}</p>
+            <span className="font-semibold text-[#00a884] text-[11px] block mb-0.5">
+              Replying to message
+            </span>
+            <p className="text-[#667781] dark:text-[#8696a0] truncate text-xs">
+              {replyingTo.content ||
+                (replyingTo.attachment ? "Attachment" : "")}
+            </p>
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
+          <button
             onClick={onCancelReply}
-            className="h-6 w-6 rounded-full text-muted-foreground hover:bg-muted"
+            className="h-6 w-6 rounded-full flex items-center justify-center text-[#667781] dark:text-[#8696a0] hover:text-[#111b21] dark:hover:text-[#e9edef] hover:bg-black/[0.05] dark:hover:bg-white/[0.05] transition-colors flex-shrink-0"
           >
             <X className="w-4 h-4" />
-          </Button>
+          </button>
         </div>
       )}
 
       {/* Attachment Preview Box */}
       {attachmentPreview && (
-        <div className="flex items-center justify-between px-3.5 py-2 mb-2 bg-white/90 dark:bg-[#182229]/90 rounded-xl border border-border text-xs shadow-sm animate-in fade-in-0 slide-in-from-bottom-2">
-          <div className="flex items-center gap-2.5 min-w-0">
+        <div className="flex items-center justify-between px-3.5 py-2 mb-2 bg-white dark:bg-[#182229] rounded-[8px] border border-border/50 text-xs shadow-sm animate-in fade-in-0 slide-in-from-bottom-2 duration-150">
+          <div className="flex items-center gap-3 min-w-0">
             {attachmentPreview.previewUrl ? (
               <img
                 src={attachmentPreview.previewUrl}
                 alt="Preview"
-                className="w-12 h-12 object-cover rounded-lg border border-border"
+                className="w-12 h-12 object-cover rounded-[7px] border border-border/40 shadow-sm"
               />
             ) : (
-              <div className="w-12 h-12 rounded-lg bg-[#00a884]/20 flex items-center justify-center text-[#00a884]">
+              <div className="w-12 h-12 rounded-[7px] bg-[#00a884]/12 flex items-center justify-center text-[#00a884] shadow-sm">
                 <FileText className="w-6 h-6" />
               </div>
             )}
             <div className="min-w-0">
-              <p className="font-semibold truncate">{attachmentPreview.file.name}</p>
-              <p className="text-[11px] text-muted-foreground">
+              <p className="font-medium truncate text-[#111b21] dark:text-[#e9edef]">
+                {attachmentPreview.file.name}
+              </p>
+              <p className="text-[11px] text-[#8696a0] mt-0.5">
                 {(attachmentPreview.file.size / 1024).toFixed(1)} KB
               </p>
             </div>
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
+          <button
             onClick={() => setAttachmentPreview(null)}
-            className="h-7 w-7 rounded-full text-muted-foreground hover:bg-muted"
+            className="h-7 w-7 rounded-full flex items-center justify-center text-[#8696a0] hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors flex-shrink-0"
           >
             <X className="w-4 h-4" />
-          </Button>
+          </button>
         </div>
       )}
 
-      {/* WhatsApp Inspired Composer Bar */}
-      <div className="flex items-end gap-2.5 max-w-7xl mx-auto">
-        <input
-          type="file"
-          ref={fileInputRef}
-          onChange={handleFileSelect}
-          className="hidden"
-          accept="image/*,.pdf,.doc,.docx,.txt,.zip"
-        />
+      {/* Hidden File Inputs */}
+      <input
+        type="file"
+        ref={imageInputRef}
+        onChange={handleFileSelect}
+        className="hidden"
+        accept="image/*,video/*"
+      />
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileSelect}
+        className="hidden"
+        accept=".pdf,.doc,.docx,.txt,.zip,.xls,.xlsx"
+      />
 
-        {/* Emoji Button */}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-              className="h-10 w-10 text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5 rounded-full flex-shrink-0 transition-colors"
-            >
-              <Smile className="w-6 h-6 stroke-[1.6]" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Emojis</TooltipContent>
-        </Tooltip>
+      {/* Composer Row */}
+      <div className="flex items-end gap-2 w-full">
+        {/* Left Action Buttons: Smile & Paperclip */}
+        <div className="flex items-center gap-1 pb-0.5">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowEmojiPicker((prev) => !prev);
+                  setShowAttachmentMenu(false);
+                }}
+                className={`h-10 w-10 rounded-full flex items-center justify-center flex-shrink-0 transition-colors ${
+                  showEmojiPicker
+                    ? "text-[#00a884] bg-[#00a884]/10"
+                    : "text-[#54656f] dark:text-[#8696a0] hover:text-[#111b21] dark:hover:text-[#e9edef] hover:bg-black/[0.05] dark:hover:bg-white/[0.05]"
+                }`}
+              >
+                <Smile className="w-[24px] h-[24px] stroke-[1.6]" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>Emojis</TooltipContent>
+          </Tooltip>
 
-        {/* Attachment Button */}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={() => fileInputRef.current?.click()}
-              className="h-10 w-10 text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5 rounded-full flex-shrink-0 transition-colors"
-            >
-              <Paperclip className="w-5 h-5 stroke-[1.7]" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Attach photo or file</TooltipContent>
-        </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAttachmentMenu((prev) => !prev);
+                  setShowEmojiPicker(false);
+                }}
+                className={`h-10 w-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-200 ${
+                  showAttachmentMenu
+                    ? "text-[#00a884] bg-[#00a884]/10 rotate-45"
+                    : "text-[#54656f] dark:text-[#8696a0] hover:text-[#111b21] dark:hover:text-[#e9edef] hover:bg-black/[0.05] dark:hover:bg-white/[0.05]"
+                }`}
+              >
+                <Paperclip className="w-[22px] h-[22px] stroke-[1.7]" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>Attach</TooltipContent>
+          </Tooltip>
+        </div>
 
-        {/* Main Text Area Input */}
-        <div className="flex-1 bg-white dark:bg-[#2a3942] rounded-lg px-3.5 py-2.5 border border-transparent shadow-[0_1px_0.5px_rgba(11,20,26,0.13)] focus-within:ring-1 focus-within:ring-[#00a884] transition-all">
+        {/* Textarea Pill */}
+        <div
+          className={`flex-1 bg-white dark:bg-[#2a3942] rounded-[22px] px-4 py-2.5 shadow-[0_1px_1px_rgba(11,20,26,0.06)] border border-black/[0.04] dark:border-white/[0.04] transition-all ${
+            isFocused ? "border-[#00a884]/40 ring-2 ring-[#00a884]/15" : ""
+          }`}
+        >
           <textarea
             ref={textareaRef}
             rows={1}
             value={content}
             onChange={handleContentChange}
             onKeyDown={handleKeyDown}
+            onFocus={() => {
+              setIsFocused(true);
+              setShowAttachmentMenu(false);
+            }}
+            onBlur={() => setIsFocused(false)}
             placeholder="Type a message"
-            className="w-full bg-transparent text-[15px] text-foreground placeholder:text-muted-foreground focus:outline-none resize-none max-h-32 leading-5 tracking-wide"
+            className="w-full bg-transparent text-[15px] text-[#111b21] dark:text-[#e9edef] placeholder:text-[#8696a0] focus:outline-none resize-none max-h-32 leading-5"
           />
         </div>
 
-        {/* Dynamic Send / Mic Action Button */}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              type="button"
-              variant={hasContent ? 'matrix' : 'ghost'}
-              size="icon"
-              disabled={isUploading}
-              onClick={() => (hasContent ? handleSend() : textareaRef.current?.focus())}
-              className={`h-10 w-10 rounded-full flex-shrink-0 transition-all ${
-                hasContent
-                  ? 'bg-[#00a884] text-white hover:bg-[#008069] shadow-md scale-100'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5'
-              }`}
-            >
-              {isUploading ? (
-                <RefreshCw className="w-4 h-4 animate-spin text-white" />
-              ) : hasContent ? (
-                <Send className="w-4 h-4 fill-current ml-0.5" />
-              ) : (
-                <Mic className="w-5 h-5 stroke-[1.7]" />
-              )}
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>{hasContent ? 'Send message (Enter)' : 'Voice note'}</TooltipContent>
-        </Tooltip>
+        {/* Proper WhatsApp Send Icon Button */}
+        <div className="pb-0.5">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                disabled={!hasContent || isUploading}
+                onClick={() => handleSend()}
+                className={`h-10 w-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-150 ${
+                  hasContent
+                    ? "bg-[#00a884] hover:bg-[#008069] text-white shadow-md shadow-[#00a884]/20 scale-100 hover:scale-105 active:scale-95 cursor-pointer"
+                    : "text-[#8696a0] hover:text-[#54656f] dark:hover:text-[#aebac1] hover:bg-black/[0.04] dark:hover:bg-white/[0.04] cursor-default"
+                } ${isUploading ? "opacity-70 cursor-not-allowed" : ""}`}
+                title="Send message (Enter)"
+              >
+                {isUploading ? (
+                  <RefreshCw className="w-5 h-5 animate-spin" />
+                ) : (
+                  /* Official WhatsApp Web Horizontal Send Paper Plane SVG */
+                  <svg
+                    viewBox="0 0 24 24"
+                    width="21"
+                    height="21"
+                    className="fill-current translate-x-0.5"
+                  >
+                    <path d="M1.101 21.757L23.8 12.028 1.101 2.3l.011 7.912 13.623 1.816-13.623 1.817.011 7.912z" />
+                  </svg>
+                )}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>Send message (Enter)</TooltipContent>
+          </Tooltip>
+        </div>
       </div>
     </div>
   );

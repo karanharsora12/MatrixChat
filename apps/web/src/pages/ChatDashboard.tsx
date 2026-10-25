@@ -12,8 +12,8 @@ import { MessageComposer } from '../features/chats/MessageComposer';
 import { EmptyChatState } from '../features/chats/EmptyChatState';
 import { NewChatModal } from '../features/contacts/NewChatModal';
 import { ProfileModal } from '../features/profile/ProfileModal';
+import { ContactInfoModal } from '../features/contacts/ContactInfoModal';
 import { Avatar, AvatarImage, AvatarFallback } from '../components/ui/avatar';
-import { Button } from '../components/ui/button';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../components/ui/tooltip';
 import {
   MessageSquare,
@@ -41,6 +41,7 @@ export function ChatDashboard() {
   // Modals
   const [isNewChatOpen, setIsNewChatOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isContactInfoOpen, setIsContactInfoOpen] = useState(false);
 
   // Refs for instantaneous & smooth scrolling
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -308,15 +309,18 @@ export function ChatDashboard() {
   const handleSendMessage = async (
     content: string,
     replyToId?: string | null,
-    attachment?: any
+    attachment?: any,
+    typeParam?: 'text' | 'image' | 'file'
   ) => {
     if (!selectedConv) return;
 
-    const messageType = attachment
-      ? attachment.mimeType.startsWith('image/')
-        ? 'image'
-        : 'file'
-      : 'text';
+    const messageType =
+      typeParam ||
+      (attachment
+        ? attachment.mimeType?.startsWith('image/')
+          ? 'image'
+          : 'file'
+        : 'text');
 
     try {
       let sent;
@@ -408,6 +412,17 @@ export function ChatDashboard() {
     }
   };
 
+  const handleScrollToMessage = (messageId: string) => {
+    const el = document.getElementById(`msg-${messageId}`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.classList.add('highlight-flash');
+      setTimeout(() => {
+        el.classList.remove('highlight-flash');
+      }, 1800);
+    }
+  };
+
   // Helper for date headers
   const shouldShowDateDivider = (currentMsg: Message, prevMsg: Message | null) => {
     if (!prevMsg) return true;
@@ -426,31 +441,31 @@ export function ChatDashboard() {
       : -1;
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-chat-lightBg dark:bg-chat-darkBg font-sans select-none antialiased">
+    <div className="flex h-screen w-screen overflow-hidden bg-[#f0f2f5] dark:bg-[#111b21] select-none antialiased">
       {/* 1. Left Sidebar: Chat list & User controls */}
       <div
-        className={`w-full md:w-96 lg:w-[420px] flex-shrink-0 flex flex-col h-full bg-white dark:bg-[#111b21] border-r border-chat-borderLight dark:border-chat-borderDark/40 z-30 ${
+        className={`w-full md:w-[400px] lg:w-[440px] flex-shrink-0 flex flex-col h-full bg-white dark:bg-[#111b21] border-r border-[#e9edef] dark:border-[#2a3942]/40 z-30 ${
           selectedConv ? 'hidden md:flex' : 'flex'
         }`}
       >
         {/* Sidebar Header */}
-        <div className="h-16 px-4 bg-card border-b border-border/50 flex items-center justify-between flex-shrink-0">
+        <div className="h-[60px] px-4 bg-[#f0f2f5] dark:bg-[#202c33] border-b border-[#e9edef]/50 dark:border-[#2a3942]/50 flex items-center justify-between flex-shrink-0">
           {/* User profile avatar trigger */}
           <div
             onClick={() => setIsProfileOpen(true)}
             className="flex items-center gap-3 cursor-pointer group"
           >
-            <Avatar className="w-10 h-10 border border-border group-hover:ring-2 group-hover:ring-[#00a884] transition-all">
+            <Avatar className="w-10 h-10 border-none group-hover:ring-2 group-hover:ring-[#00a884]/50 transition-all duration-200">
               {user?.avatarUrl && <AvatarImage src={user.avatarUrl} />}
-              <AvatarFallback className="bg-primary/20 text-primary font-semibold text-sm">
+              <AvatarFallback className="bg-[#00a884]/15 text-[#00a884] font-semibold text-sm">
                 {(user?.displayName || 'U')[0]}
               </AvatarFallback>
             </Avatar>
             <div className="hidden sm:block min-w-0">
-              <h2 className="text-sm font-semibold text-foreground truncate group-hover:text-[#00a884] transition-colors">
+              <h2 className="text-sm font-semibold text-[#111b21] dark:text-[#e9edef] truncate group-hover:text-[#00a884] transition-colors duration-200">
                 {user?.displayName || 'Set Display Name'}
               </h2>
-              <p className="text-[11px] text-muted-foreground truncate">
+              <p className="text-[11px] text-[#667781] dark:text-[#8696a0] truncate">
                 {user?.phoneNumber}
               </p>
             </div>
@@ -460,42 +475,36 @@ export function ChatDashboard() {
           <div className="flex items-center gap-1">
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
+                <button
                   onClick={toggleTheme}
-                  className="h-9 w-9 text-muted-foreground hover:text-foreground"
+                  className="h-9 w-9 rounded-full flex items-center justify-center text-[#54656f] dark:text-[#aebac1] hover:bg-black/[0.06] dark:hover:bg-white/[0.06] transition-colors"
                 >
-                  {theme === 'dark' ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4" />}
-                </Button>
+                  {theme === 'dark' ? <Sun className="w-[18px] h-[18px] text-amber-400" /> : <Moon className="w-[18px] h-[18px]" />}
+                </button>
               </TooltipTrigger>
               <TooltipContent>{theme === 'dark' ? 'Light mode' : 'Dark mode'}</TooltipContent>
             </Tooltip>
 
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
+                <button
                   onClick={() => setIsNewChatOpen(true)}
-                  className="h-9 w-9 text-[#00a884] hover:bg-[#00a884]/10"
+                  className="h-9 w-9 rounded-full flex items-center justify-center text-[#00a884] hover:bg-[#00a884]/10 transition-colors"
                 >
                   <Plus className="w-5 h-5" />
-                </Button>
+                </button>
               </TooltipTrigger>
               <TooltipContent>Start new chat</TooltipContent>
             </Tooltip>
 
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
+                <button
                   onClick={logout}
-                  className="h-9 w-9 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                  className="h-9 w-9 rounded-full flex items-center justify-center text-[#54656f] dark:text-[#aebac1] hover:text-red-400 hover:bg-red-400/10 transition-colors"
                 >
-                  <LogOut className="w-4 h-4" />
-                </Button>
+                  <LogOut className="w-[18px] h-[18px]" />
+                </button>
               </TooltipTrigger>
               <TooltipContent>Log out</TooltipContent>
             </Tooltip>
@@ -514,20 +523,12 @@ export function ChatDashboard() {
 
       {/* 2. Main Conversation Panel */}
       <div
-        className={`flex-1 flex flex-col h-full bg-[#efeae2] dark:bg-[#0b141a] relative z-10 ${
+        className={`flex-1 flex flex-col h-full relative z-10 chat-wallpaper ${
           !selectedConv ? 'hidden md:flex' : 'flex'
         }`}
       >
         {selectedConv ? (
           <>
-            {/* WhatsApp Doodle Wallpaper Texture Overlay */}
-            <div
-              className="absolute inset-0 opacity-[0.05] dark:opacity-[0.035] pointer-events-none"
-              style={{
-                backgroundImage: `radial-gradient(#00a884 1px, transparent 1px)`,
-                backgroundSize: '24px 24px',
-              }}
-            />
 
             {/* Conversation Header */}
             <ChatHeader
@@ -537,64 +538,69 @@ export function ChatDashboard() {
               onTogglePin={handleTogglePin}
               onToggleMute={handleToggleMute}
               onBlockUser={handleBlockUser}
-              onOpenProfile={() => setIsProfileOpen(true)}
+              onOpenProfile={() => setIsContactInfoOpen(true)}
             />
 
-            {/* Messages Scroll Area */}
+            {/* Messages Scroll Area — Uses the full side space without restrictive max-width */}
             <div
               ref={scrollContainerRef}
               onScroll={handleScroll}
-              className="flex-1 overflow-y-auto px-4 sm:px-8 lg:px-16 py-4 space-y-1 z-10"
+              className="flex-1 overflow-y-auto px-3 sm:px-5 md:px-6 py-3 z-10"
             >
-              {loadingMessages && messages.length === 0 ? (
-                <div className="flex justify-center items-center h-full text-muted-foreground text-xs gap-2">
-                  <RefreshCw className="w-4 h-4 animate-spin text-[#00a884]" />
-                  <span>Loading messages...</span>
-                </div>
-              ) : messages.length > 0 ? (
-                messages.map((msg, idx) => {
-                  const prevMsg = idx > 0 ? messages[idx - 1] : null;
-                  const showDate = shouldShowDateDivider(msg, prevMsg);
-                  const isUnreadSplitPoint = idx === unreadSplitIndex;
-
-                  return (
-                    <React.Fragment key={msg.id}>
-                      {/* Date Divider Badge */}
-                      {showDate && (
-                        <div className="flex justify-center my-3 select-none">
-                          <span className="bg-white/80 dark:bg-[#182229]/80 backdrop-blur-sm text-muted-foreground text-[11px] font-medium uppercase px-3 py-1 rounded-lg shadow-[0_1px_0.5px_rgba(11,20,26,0.13)] border border-border/30">
-                            {formatDateDivider(msg.createdAt)}
-                          </span>
-                        </div>
-                      )}
-
-                      {/* Unread Messages Divider Badge */}
-                      {isUnreadSplitPoint && (
-                        <div ref={unreadDividerRef} className="flex justify-center my-3 select-none">
-                          <div className="bg-[#00a884]/15 border border-[#00a884]/30 text-[#00a884] text-[11px] font-semibold tracking-wider uppercase px-4 py-1 rounded-full shadow-sm">
-                            {unreadCountAtOpenRef.current} Unread{' '}
-                            {unreadCountAtOpenRef.current === 1 ? 'Message' : 'Messages'}
-                          </div>
-                        </div>
-                      )}
-
-                      <MessageBubble
-                        message={msg}
-                        isMe={msg.senderId === user?.id}
-                        onReply={(m) => setReplyingTo(m)}
-                        onDelete={handleDeleteMessage}
-                      />
-                    </React.Fragment>
-                  );
-                })
-              ) : (
-                <div className="flex flex-col items-center justify-center h-full text-center text-xs text-muted-foreground select-none">
-                  <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-card border border-border/50 shadow-sm max-w-xs text-foreground">
-                    <MessageSquare className="w-4 h-4 text-[#00a884] shrink-0" />
-                    <span>No messages yet. Say hello and start the conversation!</span>
+              <div className="flex flex-col justify-end min-h-full">
+                {loadingMessages && messages.length === 0 ? (
+                  <div className="flex justify-center items-center h-full text-muted-foreground text-xs gap-2 py-20">
+                    <RefreshCw className="w-4 h-4 animate-spin text-[#00a884]" />
+                    <span>Loading messages...</span>
                   </div>
-                </div>
-              )}
+                ) : messages.length > 0 ? (
+                  messages.map((msg, idx) => {
+                    const prevMsg = idx > 0 ? messages[idx - 1] : null;
+                    const showDate = shouldShowDateDivider(msg, prevMsg);
+                    const isUnreadSplitPoint = idx === unreadSplitIndex;
+                    const showTail = !prevMsg || prevMsg.senderId !== msg.senderId || showDate;
+
+                    return (
+                      <React.Fragment key={msg.id}>
+                        {/* Date Divider Badge */}
+                        {showDate && (
+                          <div className="flex justify-center my-3 select-none">
+                            <span className="bg-white/90 dark:bg-[#182229]/90 backdrop-blur-sm text-[#54656f] dark:text-[#8696a0] text-[12px] font-normal px-3 py-[5px] rounded-[7.5px] shadow-[0_1px_0.5px_rgba(11,20,26,0.13)]">
+                              {formatDateDivider(msg.createdAt)}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* Unread Messages Divider Badge */}
+                        {isUnreadSplitPoint && (
+                          <div ref={unreadDividerRef} className="flex justify-center my-3 select-none">
+                            <div className="bg-[#00a884]/10 text-[#00a884] text-[12px] font-medium px-4 py-1.5 rounded-[7.5px] shadow-[0_1px_0.5px_rgba(11,20,26,0.13)]">
+                              {unreadCountAtOpenRef.current} Unread{' '}
+                              {unreadCountAtOpenRef.current === 1 ? 'Message' : 'Messages'}
+                            </div>
+                          </div>
+                        )}
+
+                        <MessageBubble
+                          message={msg}
+                          isMe={msg.senderId === user?.id}
+                          showTail={showTail}
+                          onReply={(m) => setReplyingTo(m)}
+                          onDelete={handleDeleteMessage}
+                          onScrollToMessage={handleScrollToMessage}
+                        />
+                      </React.Fragment>
+                    );
+                  })
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full text-center text-xs text-[#667781] dark:text-[#8696a0] select-none py-20">
+                    <div className="flex items-center gap-2.5 px-4 py-3 rounded-[7.5px] bg-white/90 dark:bg-[#182229]/90 backdrop-blur-sm shadow-[0_1px_0.5px_rgba(11,20,26,0.13)] max-w-xs text-[#111b21] dark:text-[#e9edef]">
+                      <MessageSquare className="w-4 h-4 text-[#00a884] shrink-0" />
+                      <span className="text-[13px]">No messages yet — say hello! 👋</span>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Floating "Scroll to Bottom" Button (WhatsApp Web Style) */}
@@ -602,25 +608,27 @@ export function ChatDashboard() {
               <button
                 type="button"
                 onClick={scrollToBottomSmooth}
-                className="absolute right-6 bottom-20 z-30 w-10 h-10 rounded-full bg-white dark:bg-[#202c33] shadow-xl border border-border flex items-center justify-center text-muted-foreground hover:text-foreground transition-all hover:scale-110 active:scale-95 animate-in fade-in-0 zoom-in-90 cursor-pointer"
+                className="absolute right-4 sm:right-6 bottom-[76px] z-30 w-[42px] h-[42px] rounded-full bg-white dark:bg-[#202c33] shadow-lg flex items-center justify-center text-[#54656f] dark:text-[#aebac1] hover:text-[#111b21] dark:hover:text-[#e9edef] transition-all duration-200 hover:shadow-xl active:scale-95 animate-in fade-in-0 zoom-in-90 cursor-pointer"
                 title="Scroll to bottom"
               >
-                <ChevronDown className="w-5 h-5" />
+                <ChevronDown className="w-[22px] h-[22px]" />
                 {newMessagesWhileScrolled > 0 && (
-                  <span className="absolute -top-1.5 -right-1.5 bg-[#00a884] text-white text-[10px] font-bold h-5 min-w-[20px] px-1 rounded-full flex items-center justify-center shadow">
+                  <span className="absolute -top-1 -right-1 bg-[#00a884] text-white text-[10px] font-bold h-[20px] min-w-[20px] px-1 rounded-full flex items-center justify-center shadow-sm">
                     {newMessagesWhileScrolled}
                   </span>
                 )}
               </button>
             )}
 
-            {/* Message Composer */}
-            <MessageComposer
-              conversationId={selectedConv.id}
-              replyingTo={replyingTo}
-              onCancelReply={() => setReplyingTo(null)}
-              onSendMessage={handleSendMessage}
-            />
+            {/* Message Composer Bottom Bar — Uses full width with proper WhatsApp spacing */}
+            <div className="bg-[#f0f2f5] dark:bg-[#202c33] border-t border-black/[0.06] dark:border-white/[0.06] px-3 sm:px-4 md:px-5 py-2.5 z-20 flex-shrink-0 w-full">
+              <MessageComposer
+                conversationId={selectedConv.id}
+                replyingTo={replyingTo}
+                onCancelReply={() => setReplyingTo(null)}
+                onSendMessage={handleSendMessage}
+              />
+            </div>
           </>
         ) : (
           <EmptyChatState />
@@ -649,6 +657,27 @@ export function ChatDashboard() {
           }}
         />
       )}
+
+      {/* 5. Contact Info Modal */}
+      <ContactInfoModal
+        isOpen={isContactInfoOpen}
+        onClose={() => setIsContactInfoOpen(false)}
+        conversation={selectedConv}
+        onTogglePin={handleTogglePin}
+        onToggleMute={handleToggleMute}
+        onBlockUser={handleBlockUser}
+        onContactUpdated={async () => {
+          await loadConversations();
+          if (selectedConv) {
+            try {
+              const updated = await api.getConversation(selectedConv.id);
+              setSelectedConv(updated);
+            } catch (e) {
+              console.error(e);
+            }
+          }
+        }}
+      />
     </div>
   );
 }

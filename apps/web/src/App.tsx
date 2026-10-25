@@ -3,6 +3,7 @@ import { useAuth, AuthProvider } from './hooks/useAuth';
 import { LoginPage } from './features/auth/LoginPage';
 import { ChatDashboard } from './pages/ChatDashboard';
 import { TooltipProvider } from './components/ui/tooltip';
+import { ModalProvider } from './components/ui/modal';
 import { MessageSquare, RefreshCw } from 'lucide-react';
 
 function AppContent() {
@@ -35,9 +36,11 @@ function AppContent() {
 export function App() {
   return (
     <TooltipProvider delayDuration={250}>
-      <AuthProvider>
-        <AppContent />
-      </AuthProvider>
+      <ModalProvider>
+        <AuthProvider>
+          <AppContent />
+        </AuthProvider>
+      </ModalProvider>
     </TooltipProvider>
   );
 }

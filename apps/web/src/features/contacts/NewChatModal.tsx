@@ -13,6 +13,7 @@ import { Input } from '../../components/ui/input';
 import { Avatar, AvatarImage, AvatarFallback } from '../../components/ui/avatar';
 import { ScrollArea } from '../../components/ui/scroll-area';
 import { Combobox } from '../../components/ui/combobox';
+import { modal } from '../../components/ui/modal';
 import { Search, UserPlus, MessageSquare, RefreshCw, Globe } from 'lucide-react';
 
 interface NewChatModalProps {
@@ -115,7 +116,7 @@ export function NewChatModal({ isOpen, onClose, onSelectConversation }: NewChatM
         setFoundUser({ ...foundUser, isContact: true });
       }
     } catch (err: any) {
-      alert(err.message || 'Failed to save contact');
+      modal.error(err.message || 'Failed to save contact');
     }
   };
 
