@@ -339,10 +339,12 @@ export function MessageComposer({
           </Tooltip>
         </div>
 
-        {/* Textarea Pill */}
+        {/* Textarea — Styled like the search filter in contacts */}
         <div
-          className={`flex-1 bg-white dark:bg-[#2a3942] rounded-[22px] px-4 py-2.5 shadow-[0_1px_1px_rgba(11,20,26,0.06)] border border-black/[0.04] dark:border-white/[0.04] transition-all ${
-            isFocused ? "border-[#00a884]/40 ring-2 ring-[#00a884]/15" : ""
+          className={`flex-1 flex items-center bg-white dark:bg-[#2a3942] rounded-lg px-3.5 py-2 min-h-[40px] transition-all duration-200 ${
+            isFocused
+              ? "shadow-[0_0_0_1px_rgba(0,168,132,0.4)] bg-white dark:bg-[#2a3942]"
+              : "shadow-[0_1px_0.5px_rgba(11,20,26,0.06)]"
           }`}
         >
           <textarea
@@ -357,7 +359,7 @@ export function MessageComposer({
             }}
             onBlur={() => setIsFocused(false)}
             placeholder="Type a message"
-            className="w-full bg-transparent text-[15px] text-[#111b21] dark:text-[#e9edef] placeholder:text-[#8696a0] focus:outline-none resize-none max-h-32 leading-5"
+            className="w-full bg-transparent text-[14.5px] text-[#111b21] dark:text-[#e9edef] placeholder:text-[#8696a0] focus:outline-none resize-none max-h-32 leading-5"
           />
         </div>
 
