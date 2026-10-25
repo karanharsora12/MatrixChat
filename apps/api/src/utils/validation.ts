@@ -66,6 +66,20 @@ export function normalizeE164(phone: string, defaultCountryCode = '+1'): string 
 }
 
 /**
+ * Validates and normalizes email address (lowercased and trimmed)
+ */
+export function normalizeEmail(email: string): string | null {
+  if (!email || typeof email !== 'string') return null;
+  const trimmed = email.trim().toLowerCase();
+  // Standard RFC-compliant email pattern
+  const emailRegex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/;
+  if (!emailRegex.test(trimmed) || trimmed.length > 254) {
+    return null;
+  }
+  return trimmed;
+}
+
+/**
  * Validates standard UUID v4 format
  */
 export function isValidUUID(val: unknown): boolean {

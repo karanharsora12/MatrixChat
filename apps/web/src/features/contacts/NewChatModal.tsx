@@ -9,12 +9,11 @@ import {
   DialogTitle,
 } from '../../components/ui/dialog';
 import { Button } from '../../components/ui/button';
-import { Input } from '../../components/ui/input';
 import { Avatar, AvatarImage, AvatarFallback } from '../../components/ui/avatar';
 import { ScrollArea } from '../../components/ui/scroll-area';
 import { Combobox } from '../../components/ui/combobox';
 import { modal } from '../../components/ui/modal';
-import { Search, UserPlus, MessageSquare, RefreshCw, Globe } from 'lucide-react';
+import { Search, UserPlus, MessageSquare, RefreshCw, Globe, Phone, Mail } from 'lucide-react';
 
 interface NewChatModalProps {
   isOpen: boolean;
@@ -23,8 +22,10 @@ interface NewChatModalProps {
 }
 
 export function NewChatModal({ isOpen, onClose, onSelectConversation }: NewChatModalProps) {
+  const [searchMode, setSearchMode] = useState<'phone' | 'email'>('email');
   const [selectedCountry, setSelectedCountry] = useState<CountryCode>(COUNTRIES[0]);
   const [phoneNumber, setPhoneNumber] = useState('');
+  const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -35,7 +36,8 @@ export function NewChatModal({ isOpen, onClose, onSelectConversation }: NewChatM
     about: string | null;
     isContact: boolean;
     customName: string | null;
-    phoneNumber: string;
+    phoneNumber?: string | null;
+    email?: string | null;
   } | null>(null);
 
   const [savedContacts, setSavedContacts] = useState<Contact[]>([]);
@@ -57,6 +59,7 @@ export function NewChatModal({ isOpen, onClose, onSelectConversation }: NewChatM
       setFoundUser(null);
       setError(null);
       setPhoneNumber('');
+      setEmail('');
     }
   }, [isOpen]);
 
@@ -77,21 +80,40 @@ export function NewChatModal({ isOpen, onClose, onSelectConversation }: NewChatM
     setError(null);
     setFoundUser(null);
 
-    const cleaned = phoneNumber.replace(/\D/g, '');
-    if (cleaned.length < 7) {
-      setError('Please enter at least 7 digits.');
-      return;
-    }
+    if (searchMode === 'phone') {
+      const cleaned = phoneNumber.replace(/\D/g, '');
+      if (cleaned.length < 7) {
+        setError('Please enter at least 7 digits for phone search.');
+        return;
+      }
 
-    try {
-      setLoading(true);
-      const queryPhone = `${selectedCountry.dialCode}${cleaned}`;
-      const user = await api.searchContact(queryPhone);
-      setFoundUser(user);
-    } catch (err: any) {
-      setError(err.message || 'No user found with this phone number.');
-    } finally {
-      setLoading(false);
+      try {
+        setLoading(true);
+        const queryPhone = `${selectedCountry.dialCode}${cleaned}`;
+        const user = await api.searchContact({ phoneNumber: queryPhone });
+        setFoundUser(user);
+      } catch (err: any) {
+        setError(err.message || 'No user found with this phone number.');
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      const trimmedEmail = email.trim().toLowerCase();
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!trimmedEmail || !emailRegex.test(trimmedEmail)) {
+        setError('Please enter a valid email address.');
+        return;
+      }
+
+      try {
+        setLoading(true);
+        const user = await api.searchContact({ email: trimmedEmail });
+        setFoundUser(user);
+      } catch (err: any) {
+        setError(err.message || 'No user found with this email address.');
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
@@ -132,52 +154,119 @@ export function NewChatModal({ isOpen, onClose, onSelectConversation }: NewChatM
         </DialogHeader>
 
         {/* Body */}
-        <div className="p-5 space-y-5">
-          {/* Search by phone number */}
-          <form onSubmit={handleSearch} className="space-y-3">
-            <div>
-              <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
-                Country
-              </label>
-              <Combobox
-                items={countryItems}
-                value={selectedCountry.code}
-                onChange={(code) => {
-                  const c = COUNTRIES.find((x) => x.code === code);
-                  if (c) setSelectedCountry(c);
-                }}
-                searchPlaceholder="Search country or code..."
-                placeholder="Select country"
-                triggerClassName="w-full h-11"
-                className="w-[370px] max-w-[calc(100vw-5rem)]"
-              />
-            </div>
+        <div className="p-5 space-y-4">
+          {/* Method Switcher Tabs: Email vs Phone */}
+          <div className="flex items-center p-1 bg-muted/50 rounded-xl border border-border/60">
+            <button
+              type="button"
+              onClick={() => {
+                setSearchMode('email');
+                setError(null);
+                setFoundUser(null);
+              }}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg text-xs font-semibold transition-all duration-150 ${
+                searchMode === 'email'
+                  ? 'bg-background text-foreground shadow-sm border border-border/50'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <Mail className="w-3.5 h-3.5" />
+              <span>Email Address</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setSearchMode('phone');
+                setError(null);
+                setFoundUser(null);
+              }}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg text-xs font-semibold transition-all duration-150 ${
+                searchMode === 'phone'
+                  ? 'bg-background text-foreground shadow-sm border border-border/50'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <Phone className="w-3.5 h-3.5" />
+              <span>Phone Number</span>
+            </button>
+          </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
-                Phone Number
-              </label>
-              <div className="flex rounded-xl border border-input overflow-hidden bg-background focus-within:ring-1 focus-within:ring-[#00a884]">
-                <div className="px-3.5 py-2.5 text-[#00a884] font-medium bg-muted/40 border-r border-input text-xs select-none flex items-center">
-                  {selectedCountry.dialCode}
+          {/* Search form */}
+          <form onSubmit={handleSearch} className="space-y-3">
+            {searchMode === 'email' ? (
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+                  Email Address
+                </label>
+                <div className="flex rounded-xl border border-input overflow-hidden bg-background focus-within:ring-1 focus-within:ring-[#00a884]">
+                  <div className="px-3 py-2 text-muted-foreground flex items-center">
+                    <Mail className="w-4 h-4 text-muted-foreground" />
+                  </div>
+                  <input
+                    type="email"
+                    autoFocus
+                    placeholder="e.g. alex@matrixchat.io"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="flex-1 px-2 py-2 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
+                  />
+                  <Button
+                    type="submit"
+                    variant="matrix"
+                    disabled={loading || !email.trim()}
+                    className="rounded-none px-4 h-11"
+                  >
+                    {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                  </Button>
                 </div>
-                <input
-                  type="tel"
-                  placeholder="e.g. 555-0102"
-                  value={phoneNumber}
-                  onChange={(e) => setPhoneNumber(e.target.value)}
-                  className="flex-1 px-3 py-2 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
-                />
-                <Button
-                  type="submit"
-                  variant="matrix"
-                  disabled={loading || !phoneNumber.trim()}
-                  className="rounded-none px-4 h-11"
-                >
-                  {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-                </Button>
               </div>
-            </div>
+            ) : (
+              <>
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+                    Country
+                  </label>
+                  <Combobox
+                    items={countryItems}
+                    value={selectedCountry.code}
+                    onChange={(code) => {
+                      const c = COUNTRIES.find((x) => x.code === code);
+                      if (c) setSelectedCountry(c);
+                    }}
+                    searchPlaceholder="Search country or code..."
+                    placeholder="Select country"
+                    triggerClassName="w-full h-11"
+                    className="w-[370px] max-w-[calc(100vw-5rem)]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+                    Phone Number
+                  </label>
+                  <div className="flex rounded-xl border border-input overflow-hidden bg-background focus-within:ring-1 focus-within:ring-[#00a884]">
+                    <div className="px-3.5 py-2.5 text-[#00a884] font-medium bg-muted/40 border-r border-input text-xs select-none flex items-center">
+                      {selectedCountry.dialCode}
+                    </div>
+                    <input
+                      type="tel"
+                      placeholder="e.g. 555-0102"
+                      value={phoneNumber}
+                      onChange={(e) => setPhoneNumber(e.target.value)}
+                      className="flex-1 px-3 py-2 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
+                    />
+                    <Button
+                      type="submit"
+                      variant="matrix"
+                      disabled={loading || !phoneNumber.trim()}
+                      className="rounded-none px-4 h-11"
+                    >
+                      {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                    </Button>
+                  </div>
+                </div>
+              </>
+            )}
           </form>
 
           {/* Search Error */}
@@ -194,7 +283,7 @@ export function NewChatModal({ isOpen, onClose, onSelectConversation }: NewChatM
                 <Avatar className="w-12 h-12 border border-border">
                   {foundUser.avatarUrl && <AvatarImage src={foundUser.avatarUrl} />}
                   <AvatarFallback className="bg-primary/20 text-primary font-semibold text-base">
-                    {foundUser.displayName[0]}
+                    {(foundUser.displayName || 'U')[0].toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
                 <div className="min-w-0">
@@ -202,7 +291,7 @@ export function NewChatModal({ isOpen, onClose, onSelectConversation }: NewChatM
                     {foundUser.displayName}
                   </h4>
                   <p className="text-xs text-muted-foreground truncate">
-                    {foundUser.about || foundUser.phoneNumber}
+                    {foundUser.email || foundUser.phoneNumber || foundUser.about || ''}
                   </p>
                 </div>
               </div>
@@ -254,7 +343,7 @@ export function NewChatModal({ isOpen, onClose, onSelectConversation }: NewChatM
                         <Avatar className="w-9 h-9 border border-border">
                           {contact.avatarUrl && <AvatarImage src={contact.avatarUrl} />}
                           <AvatarFallback className="text-xs font-semibold">
-                            {contact.name[0]}
+                            {(contact.name || 'U')[0].toUpperCase()}
                           </AvatarFallback>
                         </Avatar>
                         <div className="min-w-0">
@@ -262,7 +351,7 @@ export function NewChatModal({ isOpen, onClose, onSelectConversation }: NewChatM
                             {contact.name}
                           </p>
                           <p className="text-[11px] text-muted-foreground truncate">
-                            {contact.phoneNumber}
+                            {contact.email || contact.phoneNumber || ''}
                           </p>
                         </div>
                       </div>
@@ -272,7 +361,7 @@ export function NewChatModal({ isOpen, onClose, onSelectConversation }: NewChatM
                 </div>
               ) : (
                 <p className="text-xs text-muted-foreground text-center py-6 italic">
-                  No saved contacts yet. Search a number above to start a chat!
+                  No saved contacts yet. Search an email or phone number above to start a chat!
                 </p>
               )}
             </ScrollArea>

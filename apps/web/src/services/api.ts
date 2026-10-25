@@ -36,20 +36,38 @@ class ApiClient {
   }
 
   // Auth
-  async requestOtp(phoneNumber: string, countryCode: string) {
+  async requestOtp(
+    params: { phoneNumber?: string; countryCode?: string; email?: string; identifier?: string; type?: 'phone' | 'email' } | string,
+    countryCodeFallback = '+1'
+  ) {
+    const payload = typeof params === 'string'
+      ? { phoneNumber: params, countryCode: countryCodeFallback }
+      : params;
+
     return this.request<{
       success: boolean;
       message: string;
-      phoneNumber: string;
+      identifier?: string;
+      phoneNumber?: string;
+      email?: string;
+      type?: 'phone' | 'email';
       resendAfter: number;
       isDev?: boolean;
+      devCode?: string;
     }>('/auth/request-otp', {
       method: 'POST',
-      body: JSON.stringify({ phoneNumber, countryCode }),
+      body: JSON.stringify(payload),
     });
   }
 
-  async verifyOtp(phoneNumber: string, otp: string) {
+  async verifyOtp(
+    params: { phoneNumber?: string; email?: string; identifier?: string; otp: string } | string,
+    otpFallback?: string
+  ) {
+    const payload = typeof params === 'string'
+      ? { phoneNumber: params, otp: otpFallback || '' }
+      : params;
+
     const res = await this.request<{
       success: boolean;
       user: User;
@@ -57,7 +75,7 @@ class ApiClient {
       token?: string;
     }>('/auth/verify-otp', {
       method: 'POST',
-      body: JSON.stringify({ phoneNumber, otp }),
+      body: JSON.stringify(payload),
     });
 
     if (res.token) {
@@ -100,7 +118,11 @@ class ApiClient {
   }
 
   // Contacts
-  async searchContact(phoneNumber: string) {
+  async searchContact(params: { phoneNumber?: string; email?: string; query?: string } | string) {
+    const payload = typeof params === 'string'
+      ? (params.includes('@') ? { email: params } : { phoneNumber: params })
+      : params;
+
     return this.request<{
       id: string;
       displayName: string;
@@ -109,10 +131,11 @@ class ApiClient {
       about: string | null;
       isContact: boolean;
       customName: string | null;
-      phoneNumber: string;
+      phoneNumber?: string | null;
+      email?: string | null;
     }>('/contacts/search', {
       method: 'POST',
-      body: JSON.stringify({ phoneNumber }),
+      body: JSON.stringify(payload),
     });
   }
 

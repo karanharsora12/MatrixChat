@@ -5,15 +5,22 @@ import { SESSION_COOKIE_NAME } from '../../middleware/auth.js';
 export class AuthController {
   async requestOtp(req: Request, res: Response) {
     try {
-      const { phoneNumber, countryCode } = req.body || {};
+      const { phoneNumber, countryCode, email, identifier, type } = req.body || {};
 
-      if (!phoneNumber || typeof phoneNumber !== 'string') {
-        res.status(400).json({ error: 'Mobile number is required.' });
+      if (!phoneNumber && !email && !identifier) {
+        res.status(400).json({ error: 'Email address or mobile number is required.' });
         return;
       }
 
       const clientIp = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '';
-      const result = await authService.requestOtp(phoneNumber, countryCode || '+1', clientIp);
+      const result = await authService.requestOtp({
+        phoneNumber,
+        countryCode: countryCode || '+1',
+        email,
+        identifier,
+        type,
+        ipAddress: clientIp,
+      });
 
       res.status(200).json(result);
     } catch (err: any) {
@@ -27,22 +34,24 @@ export class AuthController {
 
   async verifyOtp(req: Request, res: Response) {
     try {
-      const { phoneNumber, otp } = req.body || {};
+      const { phoneNumber, email, identifier, otp } = req.body || {};
 
-      if (!phoneNumber || !otp) {
-        res.status(400).json({ error: 'Phone number and 6-digit OTP code are required.' });
+      if ((!phoneNumber && !email && !identifier) || !otp) {
+        res.status(400).json({ error: 'Target identifier and 6-digit OTP code are required.' });
         return;
       }
 
       const userAgent = req.headers['user-agent'] || '';
       const clientIp = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '';
 
-      const { user, rawSessionToken, sessionExpiresAt, isNewUser } = await authService.verifyOtp(
+      const { user, rawSessionToken, sessionExpiresAt, isNewUser } = await authService.verifyOtp({
         phoneNumber,
+        email,
+        identifier,
         otp,
         userAgent,
-        clientIp
-      );
+        ipAddress: clientIp,
+      });
 
       // Set secure HTTP-only cookie
       res.cookie(SESSION_COOKIE_NAME, rawSessionToken, {

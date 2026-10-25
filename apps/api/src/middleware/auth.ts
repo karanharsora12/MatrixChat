@@ -6,8 +6,9 @@ import { hashSessionToken } from '../utils/crypto.js';
 
 export interface AuthenticatedUser {
   id: string;
-  phoneNumber: string;
-  phoneCountryCode: string;
+  phoneNumber: string | null;
+  phoneCountryCode: string | null;
+  email: string | null;
   displayName: string | null;
   avatarUrl: string | null;
   about: string | null;
@@ -82,6 +83,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
       id: foundUser.id,
       phoneNumber: foundUser.phoneNumber,
       phoneCountryCode: foundUser.phoneCountryCode,
+      email: foundUser.email,
       displayName: foundUser.displayName,
       avatarUrl: foundUser.avatarUrl,
       about: foundUser.about,

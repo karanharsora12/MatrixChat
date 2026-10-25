@@ -1,7 +1,8 @@
 export interface User {
   id: string;
-  phoneNumber: string;
-  phoneCountryCode: string;
+  phoneNumber?: string | null;
+  phoneCountryCode?: string | null;
+  email?: string | null;
   displayName: string | null;
   avatarUrl: string | null;
   about: string | null;
@@ -29,7 +30,8 @@ export interface Contact {
   about: string | null;
   isOnline: boolean;
   lastSeenAt: string | null;
-  phoneNumber: string;
+  phoneNumber?: string | null;
+  email?: string | null;
 }
 
 export interface MessageAttachment {

@@ -1,55 +1,84 @@
 import { db } from '../../db/index.js';
 import { users, userContacts, userBlocks, userPrivacySettings } from '../../db/schema.js';
 import { eq, and, or } from 'drizzle-orm';
-import { normalizeE164, sanitizeString, isValidUUID } from '../../utils/validation.js';
+import { normalizeE164, normalizeEmail, sanitizeString, isValidUUID } from '../../utils/validation.js';
 
 export class ContactsService {
   /**
-   * Search for a single user by normalized phone number
+   * Search for a single user by phone number or email address
    */
-  async searchByPhone(requestingUserId: string, rawPhone: string) {
-    const normalizedPhone = normalizeE164(rawPhone);
-    if (!normalizedPhone) {
-      throw { status: 400, message: 'Invalid mobile phone number format.' };
+  async searchContact(
+    requestingUserId: string,
+    params: { phoneNumber?: string; email?: string; query?: string }
+  ) {
+    let targetUser: typeof users.$inferSelect | undefined;
+
+    const rawInput = (params.email || params.phoneNumber || params.query || '').trim();
+    if (!rawInput) {
+      throw { status: 400, message: 'Please enter a phone number or email address to search.' };
     }
 
-    const [foundUser] = await db
-      .select()
-      .from(users)
-      .where(eq(users.phoneNumber, normalizedPhone))
-      .limit(1);
+    if (params.email || rawInput.includes('@')) {
+      const normalizedEmail = normalizeEmail(rawInput);
+      if (!normalizedEmail) {
+        throw { status: 400, message: 'Invalid email address format.' };
+      }
 
-    if (!foundUser) {
-      throw { status: 404, message: 'No registered MatrixChat user found with this phone number.' };
+      const [found] = await db
+        .select()
+        .from(users)
+        .where(eq(users.email, normalizedEmail))
+        .limit(1);
+
+      if (!found) {
+        throw { status: 404, message: 'No registered MatrixChat user found with this email address.' };
+      }
+      targetUser = found;
+    } else {
+      const normalizedPhone = normalizeE164(rawInput);
+      if (!normalizedPhone) {
+        throw { status: 400, message: 'Invalid mobile phone number format.' };
+      }
+
+      const [found] = await db
+        .select()
+        .from(users)
+        .where(eq(users.phoneNumber, normalizedPhone))
+        .limit(1);
+
+      if (!found) {
+        throw { status: 404, message: 'No registered MatrixChat user found with this phone number.' };
+      }
+      targetUser = found;
     }
 
-    if (foundUser.id === requestingUserId) {
-      throw { status: 400, message: 'You cannot add or search your own phone number.' };
+    if (targetUser.id === requestingUserId) {
+      throw { status: 400, message: 'You cannot add or search yourself.' };
     }
 
     // Check if target user has blocked requesting user
     const [blocked] = await db
       .select()
       .from(userBlocks)
-      .where(and(eq(userBlocks.blockerId, foundUser.id), eq(userBlocks.blockedId, requestingUserId)))
+      .where(and(eq(userBlocks.blockerId, targetUser.id), eq(userBlocks.blockedId, requestingUserId)))
       .limit(1);
 
     if (blocked) {
-      throw { status: 404, message: 'No registered MatrixChat user found with this phone number.' };
+      throw { status: 404, message: 'User not found or unavailable.' };
     }
 
     // Check if already in requesting user's contacts
     const [existingContact] = await db
       .select()
       .from(userContacts)
-      .where(and(eq(userContacts.userId, requestingUserId), eq(userContacts.contactUserId, foundUser.id)))
+      .where(and(eq(userContacts.userId, requestingUserId), eq(userContacts.contactUserId, targetUser.id)))
       .limit(1);
 
     // Check privacy settings for avatar and about
     const [privacy] = await db
       .select()
       .from(userPrivacySettings)
-      .where(eq(userPrivacySettings.userId, foundUser.id))
+      .where(eq(userPrivacySettings.userId, targetUser.id))
       .limit(1);
 
     const allowsAvatar =
@@ -63,15 +92,23 @@ export class ContactsService {
       (privacy.aboutVisibility === 'contacts' && Boolean(existingContact));
 
     return {
-      id: foundUser.id,
-      displayName: existingContact?.customName || foundUser.displayName || 'MatrixChat User',
-      originalDisplayName: foundUser.displayName,
-      avatarUrl: allowsAvatar ? foundUser.avatarUrl : null,
-      about: allowsAbout ? foundUser.about : null,
+      id: targetUser.id,
+      displayName: existingContact?.customName || targetUser.displayName || targetUser.email || 'MatrixChat User',
+      originalDisplayName: targetUser.displayName,
+      avatarUrl: allowsAvatar ? targetUser.avatarUrl : null,
+      about: allowsAbout ? targetUser.about : null,
       isContact: Boolean(existingContact),
       customName: existingContact?.customName || null,
-      phoneNumber: foundUser.phoneNumber, // revealed upon deliberate search match
+      phoneNumber: targetUser.phoneNumber,
+      email: targetUser.email,
     };
+  }
+
+  /**
+   * Search for a single user by normalized phone number (backward compatible)
+   */
+  async searchByPhone(requestingUserId: string, rawPhone: string) {
+    return this.searchContact(requestingUserId, { phoneNumber: rawPhone });
   }
 
   /**
@@ -83,6 +120,7 @@ export class ContactsService {
         contactId: userContacts.id,
         userId: users.id,
         phoneNumber: users.phoneNumber,
+        email: users.email,
         displayName: users.displayName,
         customName: userContacts.customName,
         avatarUrl: users.avatarUrl,
@@ -98,7 +136,7 @@ export class ContactsService {
     return list.map((item) => ({
       id: item.userId,
       contactId: item.contactId,
-      name: item.customName || item.displayName || 'MatrixChat User',
+      name: item.customName || item.displayName || item.email || item.phoneNumber || 'MatrixChat User',
       displayName: item.displayName,
       customName: item.customName,
       avatarUrl: item.avatarUrl,
@@ -106,6 +144,7 @@ export class ContactsService {
       isOnline: item.isOnline,
       lastSeenAt: item.lastSeenAt,
       phoneNumber: item.phoneNumber,
+      email: item.email,
     }));
   }
 

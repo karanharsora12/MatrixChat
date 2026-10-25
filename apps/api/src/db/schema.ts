@@ -16,8 +16,9 @@ export const users = pgTable(
   'users',
   {
     id: uuid('id').defaultRandom().primaryKey(),
-    phoneNumber: varchar('phone_number', { length: 32 }).notNull().unique(),
-    phoneCountryCode: varchar('phone_country_code', { length: 8 }).notNull(),
+    phoneNumber: varchar('phone_number', { length: 32 }).unique(),
+    phoneCountryCode: varchar('phone_country_code', { length: 8 }),
+    email: varchar('email', { length: 255 }).unique(),
     displayName: varchar('display_name', { length: 100 }),
     avatarUrl: text('avatar_url'),
     about: text('about').default('Hey there! I am using MatrixChat.'),
@@ -28,6 +29,7 @@ export const users = pgTable(
   },
   (table) => [
     index('idx_users_phone').on(table.phoneNumber),
+    index('idx_users_email').on(table.email),
   ]
 );
 
@@ -57,7 +59,9 @@ export const otpChallenges = pgTable(
   'otp_challenges',
   {
     id: uuid('id').defaultRandom().primaryKey(),
-    phoneNumber: varchar('phone_number', { length: 32 }).notNull(),
+    phoneNumber: varchar('phone_number', { length: 32 }),
+    identifier: varchar('identifier', { length: 255 }),
+    type: varchar('type', { length: 16 }).default('phone').notNull(),
     otpHash: varchar('otp_hash', { length: 128 }).notNull(),
     attempts: integer('attempts').default(0).notNull(),
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
@@ -67,6 +71,7 @@ export const otpChallenges = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
+    index('idx_otp_identifier').on(table.identifier),
     index('idx_otp_phone').on(table.phoneNumber),
     index('idx_otp_created_at').on(table.createdAt),
   ]

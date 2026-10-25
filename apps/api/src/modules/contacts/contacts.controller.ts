@@ -2,18 +2,22 @@ import { Request, Response } from 'express';
 import { contactsService } from './contacts.service.js';
 
 export class ContactsController {
-  async searchByPhone(req: Request, res: Response) {
+  async search(req: Request, res: Response) {
     try {
-      const { phoneNumber } = req.body || {};
-      if (!phoneNumber || typeof phoneNumber !== 'string') {
-        res.status(400).json({ error: 'Phone number is required.' });
+      const { phoneNumber, email, query } = req.body || {};
+      if (!phoneNumber && !email && !query) {
+        res.status(400).json({ error: 'Phone number or email address is required.' });
         return;
       }
-      const result = await contactsService.searchByPhone(req.user!.id, phoneNumber);
+      const result = await contactsService.searchContact(req.user!.id, { phoneNumber, email, query });
       res.status(200).json(result);
     } catch (err: any) {
       res.status(err.status || 500).json({ error: err.message || 'Error searching contact' });
     }
+  }
+
+  async searchByPhone(req: Request, res: Response) {
+    return this.search(req, res);
   }
 
   async listContacts(req: Request, res: Response) {
