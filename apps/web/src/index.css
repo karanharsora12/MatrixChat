@@ -1,0 +1,95 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 210 20% 98%;
+    --foreground: 222 47% 11%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+
+    --primary: 167 100% 33%; /* #00a884 */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 210 20% 95%;
+    --secondary-foreground: 222 47% 11%;
+
+    --muted: 210 20% 92%;
+    --muted-foreground: 200 10% 45%;
+
+    --accent: 167 100% 33%;
+    --accent-foreground: 222 47% 11%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 200 15% 90%;
+    --input: 200 15% 90%;
+    --ring: 167 100% 33%;
+
+    --radius: 0.75rem;
+  }
+
+  .dark {
+    --background: 203 31% 10%; /* #111b21 */
+    --foreground: 210 40% 98%;
+
+    --card: 203 23% 16%; /* #202c33 */
+    --card-foreground: 210 40% 98%;
+
+    --popover: 203 23% 18%; /* #233138 */
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 167 100% 33%; /* #00a884 */
+    --primary-foreground: 203 31% 10%;
+
+    --secondary: 203 23% 20%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 203 23% 22%;
+    --muted-foreground: 203 14% 60%; /* #8696a0 */
+
+    --accent: 167 100% 33%;
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 203 22% 21%; /* #2a3942 */
+    --input: 203 22% 21%;
+    --ring: 167 100% 33%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* Custom WhatsApp/Matrix scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(134, 150, 160, 0.3);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(134, 150, 160, 0.5);
+}
