@@ -1,6 +1,6 @@
 import { db } from '../../db/index.js';
 import { users, userPrivacySettings, sessions, otpChallenges } from '../../db/schema.js';
-import { eq, and, desc, gt, or } from 'drizzle-orm';
+import { eq, and, desc, gt } from 'drizzle-orm';
 import {
   generateOtp,
   hashOtp,
@@ -8,8 +8,7 @@ import {
   generateSessionToken,
   hashSessionToken,
 } from '../../utils/crypto.js';
-import { normalizeE164, normalizeEmail } from '../../utils/validation.js';
-import { getSmsProvider } from './sms/index.js';
+import { normalizeEmail } from '../../utils/validation.js';
 import { getEmailProvider } from './email/index.js';
 
 const OTP_EXPIRY_MINUTES = 5;
@@ -18,61 +17,41 @@ const MAX_VERIFY_ATTEMPTS = 5;
 const SESSION_EXPIRY_DAYS = 30;
 
 export interface RequestOtpParams {
-  type?: 'phone' | 'email';
-  phoneNumber?: string;
-  countryCode?: string;
   email?: string;
   identifier?: string;
   ipAddress?: string;
 }
 
 export interface VerifyOtpParams {
-  identifier?: string;
-  phoneNumber?: string;
   email?: string;
+  identifier?: string;
   otp: string;
   userAgent?: string;
   ipAddress?: string;
 }
 
 export class AuthService {
-  private smsProvider = getSmsProvider();
   private emailProvider = getEmailProvider();
 
   /**
-   * Request OTP code for a given mobile number or email address
+   * Request OTP verification code for a given email address
    */
   async requestOtp(params: RequestOtpParams) {
-    const { countryCode = '+1', ipAddress = '' } = params;
-    let authType: 'phone' | 'email' = params.type || (params.email ? 'email' : 'phone');
-    let normalizedIdentifier: string | null = null;
+    const { ipAddress = '' } = params;
+    const rawEmail = params.email || params.identifier || '';
+    const normalizedEmail = normalizeEmail(rawEmail);
 
-    if (params.email || authType === 'email') {
-      const emailInput = params.email || params.identifier || '';
-      normalizedIdentifier = normalizeEmail(emailInput);
-      if (!normalizedIdentifier) {
-        throw { status: 400, message: 'Invalid email address format.' };
-      }
-      authType = 'email';
-    } else {
-      const phoneInput = params.phoneNumber || params.identifier || '';
-      normalizedIdentifier = normalizeE164(phoneInput, countryCode);
-      if (!normalizedIdentifier) {
-        throw { status: 400, message: 'Invalid international phone number format.' };
-      }
-      authType = 'phone';
+    if (!normalizedEmail) {
+      throw { status: 400, message: 'Please enter a valid email address.' };
     }
 
-    // Check for recent unexpired challenge cooldown
+    // Check for active cooldown on recent unexpired challenge
     const [recentChallenge] = await db
       .select()
       .from(otpChallenges)
       .where(
         and(
-          or(
-            eq(otpChallenges.identifier, normalizedIdentifier),
-            eq(otpChallenges.phoneNumber, normalizedIdentifier)
-          ),
+          eq(otpChallenges.identifier, normalizedEmail),
           eq(otpChallenges.isConsumed, false),
           gt(otpChallenges.expiresAt, new Date())
         )
@@ -94,19 +73,19 @@ export class AuthService {
       }
     }
 
-    // Generate fresh OTP
+    // Generate fresh 6-digit OTP
     const otp = generateOtp();
-    const otpHash = hashOtp(normalizedIdentifier, otp);
+    const otpHash = hashOtp(normalizedEmail, otp);
 
     const now = new Date();
     const expiresAt = new Date(now.getTime() + OTP_EXPIRY_MINUTES * 60 * 1000);
     const resendAvailableAt = new Date(now.getTime() + RESEND_COOLDOWN_SECONDS * 1000);
 
-    // Persist challenge
+    // Persist OTP challenge
     await db.insert(otpChallenges).values({
-      identifier: normalizedIdentifier,
-      phoneNumber: authType === 'phone' ? normalizedIdentifier : null,
-      type: authType,
+      identifier: normalizedEmail,
+      phoneNumber: null,
+      type: 'email',
       otpHash,
       attempts: 0,
       expiresAt,
@@ -117,73 +96,44 @@ export class AuthService {
 
     const isDev = process.env.NODE_ENV !== 'production';
 
-    // Dispatch via configured adapter
-    if (authType === 'email') {
-      const emailResult = await this.emailProvider.sendOtp(normalizedIdentifier, otp);
-      if (!emailResult.success) {
-        console.error('[Email Dispatch Failed]', emailResult.error);
-        throw { status: 502, message: 'Unable to deliver verification email at this time. Please try again.' };
-      }
-
-      return {
-        success: true,
-        message: 'Verification code sent to your email.',
-        identifier: normalizedIdentifier,
-        email: normalizedIdentifier,
-        type: 'email',
-        resendAfter: RESEND_COOLDOWN_SECONDS,
-        isDev,
-        devCode: isDev ? otp : undefined,
-      };
-    } else {
-      const smsResult = await this.smsProvider.sendOtp(normalizedIdentifier, otp);
-      if (!smsResult.success) {
-        console.error('[SMS Dispatch Failed]', smsResult.error);
-        throw { status: 502, message: 'Unable to deliver verification SMS at this time. Please try again.' };
-      }
-
-      return {
-        success: true,
-        message: 'Verification code sent to your phone.',
-        identifier: normalizedIdentifier,
-        phoneNumber: normalizedIdentifier,
-        type: 'phone',
-        resendAfter: RESEND_COOLDOWN_SECONDS,
-        isDev,
-        devCode: isDev ? otp : undefined,
+    // Dispatch via configured Email Provider (SMTP / Nodemailer)
+    const emailResult = await this.emailProvider.sendOtp(normalizedEmail, otp);
+    if (!emailResult.success) {
+      console.error('[Email Dispatch Failed]', emailResult.error);
+      throw {
+        status: 502,
+        message: emailResult.error || 'Unable to deliver verification email at this time. Please check SMTP configuration.',
       };
     }
+
+    return {
+      success: true,
+      message: 'Verification code sent to your email address.',
+      identifier: normalizedEmail,
+      email: normalizedEmail,
+      type: 'email',
+      resendAfter: RESEND_COOLDOWN_SECONDS,
+      isDev,
+      devCode: isDev ? otp : undefined,
+    };
   }
 
   /**
-   * Verify OTP and initiate user session
+   * Verify OTP and initiate authenticated user session
    */
   async verifyOtp(params: VerifyOtpParams) {
-    const { enteredOtp, userAgent = '', ipAddress = '' } = {
-      ...params,
-      enteredOtp: params.otp,
-    };
+    const { userAgent = '', ipAddress = '' } = params;
+    const enteredOtp = (params.otp || '').trim();
 
-    if (!enteredOtp || !/^\d{6}$/.test(enteredOtp.trim())) {
-      throw { status: 400, message: 'OTP must be a 6-digit numeric code.' };
+    if (!enteredOtp || !/^\d{6}$/.test(enteredOtp)) {
+      throw { status: 400, message: 'Please enter all 6 numeric digits of your verification code.' };
     }
 
-    const rawInput = params.email || params.phoneNumber || params.identifier || '';
-    let targetIdentifier: string | null = null;
-    let authType: 'phone' | 'email' = 'phone';
+    const rawEmail = params.email || params.identifier || '';
+    const normalizedEmail = normalizeEmail(rawEmail);
 
-    if (rawInput.includes('@') || params.email) {
-      targetIdentifier = normalizeEmail(rawInput);
-      authType = 'email';
-      if (!targetIdentifier) {
-        throw { status: 400, message: 'Invalid email address format.' };
-      }
-    } else {
-      targetIdentifier = normalizeE164(rawInput);
-      authType = 'phone';
-      if (!targetIdentifier) {
-        throw { status: 400, message: 'Invalid phone number format.' };
-      }
+    if (!normalizedEmail) {
+      throw { status: 400, message: 'Invalid email address.' };
     }
 
     // Retrieve active challenge
@@ -192,10 +142,7 @@ export class AuthService {
       .from(otpChallenges)
       .where(
         and(
-          or(
-            eq(otpChallenges.identifier, targetIdentifier),
-            eq(otpChallenges.phoneNumber, targetIdentifier)
-          ),
+          eq(otpChallenges.identifier, normalizedEmail),
           eq(otpChallenges.isConsumed, false),
           gt(otpChallenges.expiresAt, new Date())
         )
@@ -212,10 +159,9 @@ export class AuthService {
     }
 
     // Validate OTP hash
-    const isValid = verifyOtpHash(challenge.otpHash, targetIdentifier, enteredOtp.trim());
+    const isValid = verifyOtpHash(challenge.otpHash, normalizedEmail, enteredOtp);
 
     if (!isValid) {
-      // Increment attempts
       await db
         .update(otpChallenges)
         .set({ attempts: challenge.attempts + 1 })
@@ -224,7 +170,7 @@ export class AuthService {
       const attemptsRemaining = MAX_VERIFY_ATTEMPTS - (challenge.attempts + 1);
       throw {
         status: 400,
-        message: `Invalid verification code. ${attemptsRemaining} attempts remaining.`,
+        message: `Invalid verification code. ${attemptsRemaining} attempt${attemptsRemaining === 1 ? '' : 's'} remaining.`,
       };
     }
 
@@ -234,93 +180,49 @@ export class AuthService {
       .set({ isConsumed: true })
       .where(eq(otpChallenges.id, challenge.id));
 
-    // Find or create user
+    // Find or create user by email
     let user;
     let isNewUser = false;
 
-    if (authType === 'email') {
-      const [existingUser] = await db
-        .select()
-        .from(users)
-        .where(eq(users.email, targetIdentifier))
-        .limit(1);
+    const [existingUser] = await db
+      .select()
+      .from(users)
+      .where(eq(users.email, normalizedEmail))
+      .limit(1);
 
-      if (existingUser) {
-        user = existingUser;
-      } else {
-        isNewUser = true;
-        const prefix = targetIdentifier.split('@')[0];
-        const defaultDisplayName = prefix
-          ? prefix.charAt(0).toUpperCase() + prefix.slice(1).replace(/[._-]/g, ' ')
-          : null;
-
-        const [newUser] = await db
-          .insert(users)
-          .values({
-            email: targetIdentifier,
-            phoneNumber: null,
-            phoneCountryCode: null,
-            displayName: defaultDisplayName,
-            about: 'Hey there! I am using MatrixChat.',
-            isOnline: true,
-            lastSeenAt: new Date(),
-          })
-          .returning();
-
-        user = newUser;
-
-        // Default privacy settings
-        await db.insert(userPrivacySettings).values({
-          userId: user.id,
-          lastSeenVisibility: 'everyone',
-          onlineVisibility: 'everyone',
-          avatarVisibility: 'everyone',
-          aboutVisibility: 'everyone',
-          readReceiptsEnabled: true,
-        });
-      }
+    if (existingUser) {
+      user = existingUser;
     } else {
-      const [existingUser] = await db
-        .select()
-        .from(users)
-        .where(eq(users.phoneNumber, targetIdentifier))
-        .limit(1);
+      isNewUser = true;
+      const prefix = normalizedEmail.split('@')[0];
+      const defaultDisplayName = prefix
+        ? prefix.charAt(0).toUpperCase() + prefix.slice(1).replace(/[._-]/g, ' ')
+        : 'MatrixChat User';
 
-      if (existingUser) {
-        user = existingUser;
-      } else {
-        isNewUser = true;
-        const countryCode = targetIdentifier.startsWith('+44')
-          ? '+44'
-          : targetIdentifier.startsWith('+91')
-          ? '+91'
-          : '+1';
+      const [newUser] = await db
+        .insert(users)
+        .values({
+          email: normalizedEmail,
+          phoneNumber: null,
+          phoneCountryCode: null,
+          displayName: defaultDisplayName,
+          about: 'Hey there! I am using MatrixChat.',
+          isOnline: true,
+          lastSeenAt: new Date(),
+        })
+        .returning();
 
-        const [newUser] = await db
-          .insert(users)
-          .values({
-            phoneNumber: targetIdentifier,
-            phoneCountryCode: countryCode,
-            email: null,
-            displayName: null,
-            about: 'Hey there! I am using MatrixChat.',
-            isOnline: true,
-            lastSeenAt: new Date(),
-          })
-          .returning();
+      user = newUser;
 
-        user = newUser;
-
-        // Default privacy settings
-        await db.insert(userPrivacySettings).values({
-          userId: user.id,
-          lastSeenVisibility: 'everyone',
-          onlineVisibility: 'everyone',
-          avatarVisibility: 'everyone',
-          aboutVisibility: 'everyone',
-          readReceiptsEnabled: true,
-        });
-      }
+      // Default privacy settings
+      await db.insert(userPrivacySettings).values({
+        userId: user.id,
+        lastSeenVisibility: 'everyone',
+        onlineVisibility: 'everyone',
+        avatarVisibility: 'everyone',
+        aboutVisibility: 'everyone',
+        readReceiptsEnabled: true,
+      });
     }
 
     // Create session
@@ -342,8 +244,6 @@ export class AuthService {
     return {
       user: {
         id: user.id,
-        phoneNumber: user.phoneNumber,
-        phoneCountryCode: user.phoneCountryCode,
         email: user.email,
         displayName: user.displayName,
         avatarUrl: user.avatarUrl,

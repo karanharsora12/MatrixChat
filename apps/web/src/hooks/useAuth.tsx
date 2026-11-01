@@ -4,17 +4,11 @@ import { api } from '../services/api';
 import { socketService } from '../services/socket';
 
 export interface RequestOtpOptions {
-  type?: 'phone' | 'email';
-  phoneNumber?: string;
-  countryCode?: string;
-  email?: string;
-  identifier?: string;
+  email: string;
 }
 
 export interface VerifyOtpOptions {
-  identifier?: string;
-  phoneNumber?: string;
-  email?: string;
+  email: string;
   otp: string;
 }
 
@@ -22,9 +16,7 @@ export interface RequestOtpResponse {
   success: boolean;
   message?: string;
   identifier?: string;
-  phoneNumber?: string;
   email?: string;
-  type?: 'phone' | 'email';
   resendAfter: number;
   isDev?: boolean;
   devCode?: string;
@@ -33,7 +25,7 @@ export interface RequestOtpResponse {
 interface AuthContextType {
   user: User | null;
   isLoading: boolean;
-  requestOtp: (options: RequestOtpOptions | string, countryCode?: string) => Promise<RequestOtpResponse>;
+  requestOtp: (options: RequestOtpOptions | string) => Promise<RequestOtpResponse>;
   verifyOtp: (options: VerifyOtpOptions | string, otp?: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -65,8 +57,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     refreshUser();
   }, []);
 
-  const requestOtp = async (options: RequestOtpOptions | string, countryCode = '+1') => {
-    return api.requestOtp(options, countryCode);
+  const requestOtp = async (options: RequestOtpOptions | string) => {
+    return api.requestOtp(options);
   };
 
   const verifyOtp = async (options: VerifyOtpOptions | string, otp?: string) => {

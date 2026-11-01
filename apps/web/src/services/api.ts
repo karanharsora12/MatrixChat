@@ -37,20 +37,16 @@ class ApiClient {
 
   // Auth
   async requestOtp(
-    params: { phoneNumber?: string; countryCode?: string; email?: string; identifier?: string; type?: 'phone' | 'email' } | string,
-    countryCodeFallback = '+1'
+    params: { email?: string; identifier?: string } | string
   ) {
-    const payload = typeof params === 'string'
-      ? { phoneNumber: params, countryCode: countryCodeFallback }
-      : params;
+    const email = typeof params === 'string' ? params : (params.email || params.identifier || '');
+    const payload = { email };
 
     return this.request<{
       success: boolean;
       message: string;
       identifier?: string;
-      phoneNumber?: string;
       email?: string;
-      type?: 'phone' | 'email';
       resendAfter: number;
       isDev?: boolean;
       devCode?: string;
@@ -61,12 +57,12 @@ class ApiClient {
   }
 
   async verifyOtp(
-    params: { phoneNumber?: string; email?: string; identifier?: string; otp: string } | string,
+    params: { email?: string; identifier?: string; otp: string } | string,
     otpFallback?: string
   ) {
     const payload = typeof params === 'string'
-      ? { phoneNumber: params, otp: otpFallback || '' }
-      : params;
+      ? { email: params, otp: otpFallback || '' }
+      : { email: params.email || params.identifier, otp: params.otp };
 
     const res = await this.request<{
       success: boolean;

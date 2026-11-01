@@ -5,20 +5,17 @@ import { SESSION_COOKIE_NAME } from '../../middleware/auth.js';
 export class AuthController {
   async requestOtp(req: Request, res: Response) {
     try {
-      const { phoneNumber, countryCode, email, identifier, type } = req.body || {};
+      const { email, identifier } = req.body || {};
+      const targetEmail = email || identifier;
 
-      if (!phoneNumber && !email && !identifier) {
-        res.status(400).json({ error: 'Email address or mobile number is required.' });
+      if (!targetEmail) {
+        res.status(400).json({ error: 'Email address is required.' });
         return;
       }
 
       const clientIp = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '';
       const result = await authService.requestOtp({
-        phoneNumber,
-        countryCode: countryCode || '+1',
-        email,
-        identifier,
-        type,
+        email: targetEmail,
         ipAddress: clientIp,
       });
 
@@ -34,10 +31,11 @@ export class AuthController {
 
   async verifyOtp(req: Request, res: Response) {
     try {
-      const { phoneNumber, email, identifier, otp } = req.body || {};
+      const { email, identifier, otp } = req.body || {};
+      const targetEmail = email || identifier;
 
-      if ((!phoneNumber && !email && !identifier) || !otp) {
-        res.status(400).json({ error: 'Target identifier and 6-digit OTP code are required.' });
+      if (!targetEmail || !otp) {
+        res.status(400).json({ error: 'Email address and 6-digit OTP code are required.' });
         return;
       }
 
@@ -45,9 +43,7 @@ export class AuthController {
       const clientIp = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '';
 
       const { user, rawSessionToken, sessionExpiresAt, isNewUser } = await authService.verifyOtp({
-        phoneNumber,
-        email,
-        identifier,
+        email: targetEmail,
         otp,
         userAgent,
         ipAddress: clientIp,
@@ -66,7 +62,7 @@ export class AuthController {
         success: true,
         user,
         isNewUser,
-        token: rawSessionToken, // Also return in body for flex clients
+        token: rawSessionToken,
       });
     } catch (err: any) {
       const status = err.status || 500;
@@ -77,7 +73,6 @@ export class AuthController {
   }
 
   async getSession(req: Request, res: Response) {
-    // Handled by requireAuth middleware
     res.status(200).json({
       authenticated: true,
       user: req.user,

@@ -182,13 +182,13 @@ export function ProfileModal({ isOpen, onClose, currentUser, onUserUpdated }: Pr
                   />
                 </div>
 
-                {/* Phone Number (Read-only primary identity) */}
+                {/* Email Address (Read-only primary identity) */}
                 <div>
                   <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
-                    Phone Number (Primary Identity)
+                    Email Address (Primary Identity)
                   </label>
                   <div className="flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-muted/60 border border-border text-xs text-muted-foreground">
-                    <span>{currentUser.phoneNumber}</span>
+                    <span>{currentUser.email || currentUser.phoneNumber || 'Not configured'}</span>
                     <Lock className="w-3.5 h-3.5" />
                   </div>
                 </div>

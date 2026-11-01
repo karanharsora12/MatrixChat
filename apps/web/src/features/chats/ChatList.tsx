@@ -26,10 +26,12 @@ export function ChatList({
   const [isSearchFocused, setIsSearchFocused] = useState(false);
 
   const filtered = conversations.filter((c) => {
-    const nameMatch = (c.otherUser?.name || '').toLowerCase().includes(search.toLowerCase());
+    const query = search.toLowerCase();
+    const nameMatch = (c.otherUser?.name || '').toLowerCase().includes(query);
+    const emailMatch = (c.otherUser?.email || '').toLowerCase().includes(query);
     const phoneMatch = (c.otherUser?.phoneNumber || '').includes(search);
     const unreadMatch = !filterUnread || c.unreadCount > 0;
-    return (nameMatch || phoneMatch) && unreadMatch;
+    return (nameMatch || emailMatch || phoneMatch) && unreadMatch;
   });
 
   return (

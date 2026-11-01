@@ -83,6 +83,7 @@ export interface Conversation {
     isOnline: boolean;
     lastSeenAt: string | null;
     phoneNumber?: string;
+    email?: string | null;
   } | null;
   lastMessage?: {
     id: string;

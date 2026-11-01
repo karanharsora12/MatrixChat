@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { COUNTRIES, CountryCode } from '../../utils/countries';
 import { Contact, Conversation } from '../../types';
 import { api } from '../../services/api';
 import {
@@ -11,9 +10,7 @@ import {
 import { Button } from '../../components/ui/button';
 import { Avatar, AvatarImage, AvatarFallback } from '../../components/ui/avatar';
 import { ScrollArea } from '../../components/ui/scroll-area';
-import { Combobox } from '../../components/ui/combobox';
-import { modal } from '../../components/ui/modal';
-import { Search, UserPlus, MessageSquare, RefreshCw, Globe, Phone, Mail } from 'lucide-react';
+import { Search, UserPlus, RefreshCw, Mail } from 'lucide-react';
 
 interface NewChatModalProps {
   isOpen: boolean;
@@ -22,9 +19,6 @@ interface NewChatModalProps {
 }
 
 export function NewChatModal({ isOpen, onClose, onSelectConversation }: NewChatModalProps) {
-  const [searchMode, setSearchMode] = useState<'phone' | 'email'>('email');
-  const [selectedCountry, setSelectedCountry] = useState<CountryCode>(COUNTRIES[0]);
-  const [phoneNumber, setPhoneNumber] = useState('');
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -36,29 +30,18 @@ export function NewChatModal({ isOpen, onClose, onSelectConversation }: NewChatM
     about: string | null;
     isContact: boolean;
     customName: string | null;
-    phoneNumber?: string | null;
     email?: string | null;
+    phoneNumber?: string | null;
   } | null>(null);
 
   const [savedContacts, setSavedContacts] = useState<Contact[]>([]);
   const [loadingContacts, setLoadingContacts] = useState(false);
-
-  const countryItems = React.useMemo(
-    () =>
-      COUNTRIES.map((c) => ({
-        value: c.code,
-        label: `${c.name} (${c.dialCode})`,
-        icon: <Globe className="w-4 h-4 text-muted-foreground shrink-0" />,
-      })),
-    []
-  );
 
   useEffect(() => {
     if (isOpen) {
       loadSavedContacts();
       setFoundUser(null);
       setError(null);
-      setPhoneNumber('');
       setEmail('');
     }
   }, [isOpen]);
@@ -80,40 +63,22 @@ export function NewChatModal({ isOpen, onClose, onSelectConversation }: NewChatM
     setError(null);
     setFoundUser(null);
 
-    if (searchMode === 'phone') {
-      const cleaned = phoneNumber.replace(/\D/g, '');
-      if (cleaned.length < 7) {
-        setError('Please enter at least 7 digits for phone search.');
-        return;
-      }
+    const trimmed = email.trim().toLowerCase();
+    if (!trimmed) {
+      setError('Please enter an email address or username to search.');
+      return;
+    }
 
-      try {
-        setLoading(true);
-        const queryPhone = `${selectedCountry.dialCode}${cleaned}`;
-        const user = await api.searchContact({ phoneNumber: queryPhone });
-        setFoundUser(user);
-      } catch (err: any) {
-        setError(err.message || 'No user found with this phone number.');
-      } finally {
-        setLoading(false);
-      }
-    } else {
-      const trimmedEmail = email.trim().toLowerCase();
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!trimmedEmail || !emailRegex.test(trimmedEmail)) {
-        setError('Please enter a valid email address.');
-        return;
-      }
-
-      try {
-        setLoading(true);
-        const user = await api.searchContact({ email: trimmedEmail });
-        setFoundUser(user);
-      } catch (err: any) {
-        setError(err.message || 'No user found with this email address.');
-      } finally {
-        setLoading(false);
-      }
+    try {
+      setLoading(true);
+      const user = await api.searchContact(
+        trimmed.includes('@') ? { email: trimmed } : { query: trimmed }
+      );
+      setFoundUser(user);
+    } catch (err: any) {
+      setError(err.message || 'No registered MatrixChat user found.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -124,149 +89,68 @@ export function NewChatModal({ isOpen, onClose, onSelectConversation }: NewChatM
       onSelectConversation(conv);
       onClose();
     } catch (err: any) {
-      setError(err.message || 'Failed to start conversation.');
+      setError(err.message || 'Could not initiate conversation.');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSaveContact = async (targetUserId: string, name: string) => {
+  const handleSaveContact = async (contactUserId: string, defaultName: string) => {
     try {
-      await api.saveContact(targetUserId, name);
-      await loadSavedContacts();
-      if (foundUser) {
+      setLoading(true);
+      await api.saveContact(contactUserId, defaultName);
+
+      if (foundUser && foundUser.id === contactUserId) {
         setFoundUser({ ...foundUser, isContact: true });
       }
+
+      await loadSavedContacts();
     } catch (err: any) {
-      modal.error(err.message || 'Failed to save contact');
+      setError(err.message || 'Failed to save contact.');
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-md p-0 overflow-hidden">
-        {/* Header */}
-        <DialogHeader className="px-5 py-4 border-b border-border/50 bg-muted/40">
-          <DialogTitle className="flex items-center gap-2 text-base font-bold">
-            <MessageSquare className="w-5 h-5 text-[#00a884]" />
+      <DialogContent className="sm:max-w-[460px] p-6">
+        <DialogHeader>
+          <DialogTitle className="text-lg font-semibold flex items-center gap-2">
+            <Mail className="w-5 h-5 text-[#00a884]" />
             <span>New Chat</span>
           </DialogTitle>
         </DialogHeader>
 
-        {/* Body */}
-        <div className="p-5 space-y-4">
-          {/* Method Switcher Tabs: Email vs Phone */}
-          <div className="flex items-center p-1 bg-muted/50 rounded-xl border border-border/60">
-            <button
-              type="button"
-              onClick={() => {
-                setSearchMode('email');
-                setError(null);
-                setFoundUser(null);
-              }}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg text-xs font-semibold transition-all duration-150 ${
-                searchMode === 'email'
-                  ? 'bg-background text-foreground shadow-sm border border-border/50'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              <Mail className="w-3.5 h-3.5" />
-              <span>Email Address</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setSearchMode('phone');
-                setError(null);
-                setFoundUser(null);
-              }}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg text-xs font-semibold transition-all duration-150 ${
-                searchMode === 'phone'
-                  ? 'bg-background text-foreground shadow-sm border border-border/50'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              <Phone className="w-3.5 h-3.5" />
-              <span>Phone Number</span>
-            </button>
-          </div>
-
+        <div className="space-y-4 pt-2">
           {/* Search form */}
           <form onSubmit={handleSearch} className="space-y-3">
-            {searchMode === 'email' ? (
-              <div>
-                <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
-                  Email Address
-                </label>
-                <div className="flex rounded-xl border border-input overflow-hidden bg-background focus-within:ring-1 focus-within:ring-[#00a884]">
-                  <div className="px-3 py-2 text-muted-foreground flex items-center">
-                    <Mail className="w-4 h-4 text-muted-foreground" />
-                  </div>
-                  <input
-                    type="email"
-                    autoFocus
-                    placeholder="e.g. alex@matrixchat.io"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="flex-1 px-2 py-2 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
-                  />
-                  <Button
-                    type="submit"
-                    variant="matrix"
-                    disabled={loading || !email.trim()}
-                    className="rounded-none px-4 h-11"
-                  >
-                    {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-                  </Button>
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+                Search User by Email
+              </label>
+              <div className="flex rounded-xl border border-input overflow-hidden bg-background focus-within:ring-1 focus-within:ring-[#00a884]">
+                <div className="px-3 py-2 text-muted-foreground flex items-center">
+                  <Mail className="w-4 h-4 text-muted-foreground" />
                 </div>
+                <input
+                  type="text"
+                  autoFocus
+                  placeholder="e.g. alex@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="flex-1 px-2 py-2 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
+                />
+                <Button
+                  type="submit"
+                  variant="matrix"
+                  disabled={loading || !email.trim()}
+                  className="rounded-none px-4 h-11"
+                >
+                  {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                </Button>
               </div>
-            ) : (
-              <>
-                <div>
-                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
-                    Country
-                  </label>
-                  <Combobox
-                    items={countryItems}
-                    value={selectedCountry.code}
-                    onChange={(code) => {
-                      const c = COUNTRIES.find((x) => x.code === code);
-                      if (c) setSelectedCountry(c);
-                    }}
-                    searchPlaceholder="Search country or code..."
-                    placeholder="Select country"
-                    triggerClassName="w-full h-11"
-                    className="w-[370px] max-w-[calc(100vw-5rem)]"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
-                    Phone Number
-                  </label>
-                  <div className="flex rounded-xl border border-input overflow-hidden bg-background focus-within:ring-1 focus-within:ring-[#00a884]">
-                    <div className="px-3.5 py-2.5 text-[#00a884] font-medium bg-muted/40 border-r border-input text-xs select-none flex items-center">
-                      {selectedCountry.dialCode}
-                    </div>
-                    <input
-                      type="tel"
-                      placeholder="e.g. 555-0102"
-                      value={phoneNumber}
-                      onChange={(e) => setPhoneNumber(e.target.value)}
-                      className="flex-1 px-3 py-2 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
-                    />
-                    <Button
-                      type="submit"
-                      variant="matrix"
-                      disabled={loading || !phoneNumber.trim()}
-                      className="rounded-none px-4 h-11"
-                    >
-                      {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-                    </Button>
-                  </div>
-                </div>
-              </>
-            )}
+            </div>
           </form>
 
           {/* Search Error */}
@@ -291,7 +175,7 @@ export function NewChatModal({ isOpen, onClose, onSelectConversation }: NewChatM
                     {foundUser.displayName}
                   </h4>
                   <p className="text-xs text-muted-foreground truncate">
-                    {foundUser.email || foundUser.phoneNumber || foundUser.about || ''}
+                    {foundUser.email || foundUser.about || ''}
                   </p>
                 </div>
               </div>
@@ -351,7 +235,7 @@ export function NewChatModal({ isOpen, onClose, onSelectConversation }: NewChatM
                             {contact.name}
                           </p>
                           <p className="text-[11px] text-muted-foreground truncate">
-                            {contact.email || contact.phoneNumber || ''}
+                            {contact.email || ''}
                           </p>
                         </div>
                       </div>
@@ -361,7 +245,7 @@ export function NewChatModal({ isOpen, onClose, onSelectConversation }: NewChatM
                 </div>
               ) : (
                 <p className="text-xs text-muted-foreground text-center py-6 italic">
-                  No saved contacts yet. Search an email or phone number above to start a chat!
+                  No saved contacts yet. Search an email address above to start a chat!
                 </p>
               )}
             </ScrollArea>

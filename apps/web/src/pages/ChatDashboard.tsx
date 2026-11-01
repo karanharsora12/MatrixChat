@@ -466,7 +466,7 @@ export function ChatDashboard() {
                 {user?.displayName || 'Set Display Name'}
               </h2>
               <p className="text-[11px] text-[#667781] dark:text-[#8696a0] truncate">
-                {user?.phoneNumber}
+                {user?.email || user?.phoneNumber || ''}
               </p>
             </div>
           </div>

@@ -15,6 +15,7 @@ import { Input } from '../../components/ui/input';
 import {
   User,
   Phone,
+  Mail,
   Info,
   Clock,
   Pin,
@@ -159,17 +160,17 @@ export function ContactInfoModal({
 
           {/* Details Cards */}
           <div className="space-y-3">
-            {/* Phone Number Card */}
+            {/* Email Address Card */}
             <div className="p-3.5 rounded-xl bg-muted/30 border border-border/40 flex items-start gap-3">
               <div className="w-8 h-8 rounded-lg bg-[#00a884]/10 text-[#00a884] flex items-center justify-center flex-shrink-0 mt-0.5">
-                <Phone className="w-4 h-4" />
+                <Mail className="w-4 h-4" />
               </div>
               <div className="min-w-0 flex-1">
                 <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block">
-                  Phone Number
+                  Email Address
                 </span>
                 <p className="text-sm font-medium text-foreground tracking-wide mt-0.5 select-all">
-                  {otherUser.phoneNumber || 'Protected by privacy settings'}
+                  {otherUser.email || otherUser.phoneNumber || 'Protected by privacy settings'}
                 </p>
               </div>
             </div>
