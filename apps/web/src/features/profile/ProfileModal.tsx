@@ -14,7 +14,20 @@ import { Input } from '../../components/ui/input';
 import { Switch } from '../../components/ui/switch';
 import { Combobox } from '../../components/ui/combobox';
 import { modal } from '../../components/ui/modal';
-import { User as UserIcon, Shield, Check, RefreshCw, Lock, Globe, Users } from 'lucide-react';
+import { OtpInput } from '../auth/OtpInput';
+import {
+  User as UserIcon,
+  Shield,
+  ShieldCheck,
+  Check,
+  RefreshCw,
+  Lock,
+  Globe,
+  Users,
+  QrCode,
+  Copy,
+  AlertCircle,
+} from 'lucide-react';
 
 interface ProfileModalProps {
   isOpen: boolean;
@@ -38,6 +51,18 @@ export function ProfileModal({ isOpen, onClose, currentUser, onUserUpdated }: Pr
 
   const [saving, setSaving] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  // 2FA / TOTP Authenticator States
+  const [totpEnabled, setTotpEnabled] = useState(Boolean(currentUser.totpEnabled));
+  const [settingUpTotp, setSettingUpTotp] = useState(false);
+  const [totpSetupData, setTotpSetupData] = useState<{
+    secret: string;
+    qrCodeUrl: string;
+    email: string;
+  } | null>(null);
+  const [totpVerifyCode, setTotpVerifyCode] = useState('');
+  const [totpLoading, setTotpLoading] = useState(false);
+  const [copiedKey, setCopiedKey] = useState(false);
 
   const visibilityOptions = React.useMemo(
     () => [
@@ -63,8 +88,9 @@ export function ProfileModal({ isOpen, onClose, currentUser, onUserUpdated }: Pr
   useEffect(() => {
     if (isOpen) {
       loadProfileAndPrivacy();
+      setTotpEnabled(Boolean(currentUser.totpEnabled));
     }
-  }, [isOpen]);
+  }, [isOpen, currentUser.totpEnabled]);
 
   const loadProfileAndPrivacy = async () => {
     try {
@@ -72,6 +98,9 @@ export function ProfileModal({ isOpen, onClose, currentUser, onUserUpdated }: Pr
       setDisplayName(data.displayName || '');
       setAbout(data.about || '');
       setAvatarUrl(data.avatarUrl || '');
+      if (data.totpEnabled !== undefined) {
+        setTotpEnabled(Boolean(data.totpEnabled));
+      }
       if (data.privacySettings) {
         setPrivacy(data.privacySettings);
       }
@@ -100,10 +129,81 @@ export function ProfileModal({ isOpen, onClose, currentUser, onUserUpdated }: Pr
       const updated = { ...privacy, [field]: value };
       setPrivacy(updated);
       await api.updatePrivacy(updated);
-      setSuccessMsg('Privacy preference saved.');
-      setTimeout(() => setSuccessMsg(null), 2000);
+      onUserUpdated();
     } catch (err: any) {
-      modal.error(err.message || 'Failed to update privacy settings');
+      modal.error(err.message || 'Failed to update privacy setting');
+    }
+  };
+
+  const handleStartTotpSetup = async () => {
+    try {
+      setTotpLoading(true);
+      const data = await api.setupTotp();
+      setTotpSetupData(data);
+      setSettingUpTotp(true);
+      setTotpVerifyCode('');
+    } catch (err: any) {
+      modal.error(err.message || 'Failed to initialize Authenticator setup.');
+    } finally {
+      setTotpLoading(false);
+    }
+  };
+
+  const handleVerifyAndEnableTotp = async () => {
+    if (totpVerifyCode.length !== 6) {
+      modal.error('Please enter the full 6-digit code from your authenticator app.');
+      return;
+    }
+
+    try {
+      setTotpLoading(true);
+      await api.verifyTotpSetup(totpVerifyCode);
+      setTotpEnabled(true);
+      setSettingUpTotp(false);
+      setTotpSetupData(null);
+      setTotpVerifyCode('');
+      setSuccessMsg('Authenticator App (2FA) enabled successfully!');
+      onUserUpdated();
+      setTimeout(() => setSuccessMsg(null), 3000);
+    } catch (err: any) {
+      modal.error(err.message || 'Invalid 6-digit code. Please check your app and try again.');
+    } finally {
+      setTotpLoading(false);
+    }
+  };
+
+  const handleDisableTotp = async () => {
+    const confirmed = await modal.confirm({
+      title: 'Disable Authenticator App (2FA)?',
+      message:
+        'Are you sure you want to disable two-factor authentication? Your account will only be protected by email verification codes.',
+      confirmText: 'Disable 2FA',
+      variant: 'destructive',
+    });
+
+    if (!confirmed) return;
+
+    try {
+      setTotpLoading(true);
+      await api.disableTotp();
+      setTotpEnabled(false);
+      setSettingUpTotp(false);
+      setTotpSetupData(null);
+      setSuccessMsg('Authenticator App has been disabled.');
+      onUserUpdated();
+      setTimeout(() => setSuccessMsg(null), 3000);
+    } catch (err: any) {
+      modal.error(err.message || 'Failed to disable 2FA.');
+    } finally {
+      setTotpLoading(false);
+    }
+  };
+
+  const handleCopyKey = () => {
+    if (totpSetupData?.secret) {
+      navigator.clipboard.writeText(totpSetupData.secret);
+      setCopiedKey(true);
+      setTimeout(() => setCopiedKey(false), 2000);
     }
   };
 
@@ -129,9 +229,10 @@ export function ProfileModal({ isOpen, onClose, currentUser, onUserUpdated }: Pr
         {/* Radix Tabs */}
         <div className="p-5">
           <Tabs defaultValue="profile" className="w-full">
-            <TabsList className="grid grid-cols-2 w-full mb-4">
+            <TabsList className="grid grid-cols-3 w-full mb-4">
               <TabsTrigger value="profile">Profile</TabsTrigger>
               <TabsTrigger value="privacy">Privacy</TabsTrigger>
+              <TabsTrigger value="security">Security</TabsTrigger>
             </TabsList>
 
             {/* Tab 1: Profile Details */}
@@ -197,16 +298,15 @@ export function ProfileModal({ isOpen, onClose, currentUser, onUserUpdated }: Pr
                   type="submit"
                   variant="matrix"
                   disabled={saving}
-                  className="w-full mt-4"
+                  className="w-full mt-4 cursor-pointer"
                 >
                   {saving ? <RefreshCw className="w-4 h-4 animate-spin mr-2" /> : 'Save Changes'}
                 </Button>
               </form>
             </TabsContent>
 
-            {/* Tab 2: Privacy Settings with Radix Switch & Combobox */}
+            {/* Tab 2: Privacy Settings */}
             <TabsContent value="privacy" className="space-y-4 text-sm">
-              {/* Last Seen */}
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
                   Last Seen Visibility
@@ -220,7 +320,6 @@ export function ProfileModal({ isOpen, onClose, currentUser, onUserUpdated }: Pr
                 />
               </div>
 
-              {/* Online Status */}
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
                   Online Status Visibility
@@ -234,7 +333,6 @@ export function ProfileModal({ isOpen, onClose, currentUser, onUserUpdated }: Pr
                 />
               </div>
 
-              {/* Avatar Visibility */}
               <div>
                 <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
                   Profile Photo Visibility
@@ -248,7 +346,6 @@ export function ProfileModal({ isOpen, onClose, currentUser, onUserUpdated }: Pr
                 />
               </div>
 
-              {/* Read Receipts with Radix Switch */}
               <div className="pt-3 flex items-center justify-between border-t border-border">
                 <div className="pr-4">
                   <p className="font-medium text-xs text-foreground">Read Receipts</p>
@@ -261,6 +358,164 @@ export function ProfileModal({ isOpen, onClose, currentUser, onUserUpdated }: Pr
                   onCheckedChange={(checked) => handleSavePrivacy('readReceiptsEnabled', checked)}
                 />
               </div>
+            </TabsContent>
+
+            {/* Tab 3: Security & Authenticator App (2FA / QR Code) */}
+            <TabsContent value="security" className="space-y-4 text-sm">
+              {totpEnabled && !settingUpTotp ? (
+                <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 space-y-3">
+                  <div className="flex items-start gap-3">
+                    <div className="w-9 h-9 rounded-lg bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
+                      <ShieldCheck className="w-5 h-5" />
+                    </div>
+                    <div className="space-y-1 min-w-0">
+                      <h4 className="font-semibold text-emerald-800 dark:text-emerald-300 text-sm">
+                        Authenticator App (2FA) is Active
+                      </h4>
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        Your account is secured with Google Authenticator or Microsoft Authenticator.
+                        You can sign in instantly using rolling 6-digit codes without waiting for emails.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-emerald-500/20 flex justify-end">
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="sm"
+                      disabled={totpLoading}
+                      onClick={handleDisableTotp}
+                      className="text-xs h-8 cursor-pointer"
+                    >
+                      {totpLoading ? (
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin mr-1.5" />
+                      ) : null}
+                      Disable Authenticator 2FA
+                    </Button>
+                  </div>
+                </div>
+              ) : settingUpTotp && totpSetupData ? (
+                <div className="space-y-4">
+                  <div className="text-center space-y-1">
+                    <h4 className="font-semibold text-foreground text-sm">Scan QR Code</h4>
+                    <p className="text-xs text-muted-foreground">
+                      Open Google Authenticator or Microsoft Authenticator, tap{' '}
+                      <span className="font-semibold text-foreground">+</span>, and scan this QR code:
+                    </p>
+                  </div>
+
+                  {/* QR Code Container */}
+                  <div className="flex justify-center p-3 bg-white rounded-xl shadow-xs border border-border w-fit mx-auto">
+                    <img
+                      src={totpSetupData.qrCodeUrl}
+                      alt="Authenticator QR Code"
+                      className="w-44 h-44 object-contain"
+                    />
+                  </div>
+
+                  {/* Manual Key */}
+                  <div className="p-3 bg-muted/60 rounded-xl border border-border/80 space-y-1.5 text-xs">
+                    <span className="text-[11px] font-medium text-muted-foreground">
+                      Can't scan? Enter key manually:
+                    </span>
+                    <div className="flex items-center justify-between font-mono bg-background px-2.5 py-1.5 rounded-lg border border-border text-[11px] select-all">
+                      <span className="truncate pr-2">{totpSetupData.secret}</span>
+                      <button
+                        type="button"
+                        onClick={handleCopyKey}
+                        className="text-primary hover:text-primary/80 font-sans font-semibold flex items-center gap-1 shrink-0 cursor-pointer"
+                      >
+                        {copiedKey ? (
+                          <>
+                            <Check className="w-3 h-3 text-emerald-500" />
+                            <span className="text-emerald-500">Copied</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3 h-3" />
+                            <span>Copy</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Verification Code Input */}
+                  <div className="space-y-2 pt-1">
+                    <label className="block text-xs font-semibold text-foreground">
+                      Enter the 6-digit code shown in your app to activate:
+                    </label>
+                    <OtpInput
+                      length={6}
+                      value={totpVerifyCode}
+                      onChange={setTotpVerifyCode}
+                      onComplete={handleVerifyAndEnableTotp}
+                      disabled={totpLoading}
+                    />
+                  </div>
+
+                  <div className="flex gap-2 pt-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="flex-1 cursor-pointer"
+                      onClick={() => {
+                        setSettingUpTotp(false);
+                        setTotpSetupData(null);
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="matrix"
+                      size="sm"
+                      disabled={totpLoading || totpVerifyCode.length !== 6}
+                      onClick={handleVerifyAndEnableTotp}
+                      className="flex-1 cursor-pointer"
+                    >
+                      {totpLoading ? (
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin mr-1.5" />
+                      ) : null}
+                      Activate
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-4 rounded-xl bg-muted/50 border border-border space-y-4">
+                  <div className="flex items-start gap-3">
+                    <div className="w-9 h-9 rounded-lg bg-[#00a884]/15 text-[#00a884] flex items-center justify-center shrink-0 mt-0.5">
+                      <QrCode className="w-5 h-5" />
+                    </div>
+                    <div className="space-y-1">
+                      <h4 className="font-semibold text-foreground text-sm">
+                        Google / Microsoft Authenticator
+                      </h4>
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        Log in faster and more securely by scanning a QR code once. You can sign in using
+                        rolling 6-digit verification codes generated on your phone app.
+                      </p>
+                    </div>
+                  </div>
+
+                  <Button
+                    type="button"
+                    variant="matrix"
+                    onClick={handleStartTotpSetup}
+                    disabled={totpLoading}
+                    className="w-full text-xs font-semibold flex items-center justify-center gap-2 cursor-pointer shadow-xs"
+                  >
+                    {totpLoading ? (
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <QrCode className="w-4 h-4" />
+                    )}
+                    <span>Set up Authenticator App (QR Code)</span>
+                  </Button>
+                </div>
+              )}
             </TabsContent>
           </Tabs>
         </div>

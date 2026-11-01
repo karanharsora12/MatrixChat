@@ -8,6 +8,12 @@ import {
   generateSessionToken,
   hashSessionToken,
 } from '../../utils/crypto.js';
+import {
+  generateTotpSecret,
+  generateTotpUri,
+  generateQrCodeDataUrl,
+  verifyTotp,
+} from '../../utils/totp.js';
 import { normalizeEmail } from '../../utils/validation.js';
 import { getEmailProvider } from './email/index.js';
 
@@ -250,10 +256,188 @@ export class AuthService {
         about: user.about,
         isOnline: user.isOnline,
         lastSeenAt: user.lastSeenAt,
+        totpEnabled: Boolean(user.totpEnabled),
       },
       rawSessionToken,
       sessionExpiresAt,
       isNewUser,
+    };
+  }
+
+  /**
+   * Check authentication methods available for an email address (e.g. if TOTP is active)
+   */
+  async checkAuthMethods(email: string) {
+    const normalizedEmail = normalizeEmail(email);
+    if (!normalizedEmail) {
+      return { exists: false, hasTotp: false };
+    }
+
+    const [user] = await db
+      .select({ id: users.id, totpEnabled: users.totpEnabled })
+      .from(users)
+      .where(eq(users.email, normalizedEmail))
+      .limit(1);
+
+    return {
+      exists: Boolean(user),
+      hasTotp: Boolean(user?.totpEnabled),
+    };
+  }
+
+  /**
+   * Generate a new TOTP secret & QR code for 2FA setup
+   */
+  async setupTotp(userId: string) {
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+
+    if (!user || !user.email) {
+      throw { status: 404, message: 'User not found or email missing.' };
+    }
+
+    const secret = generateTotpSecret(20);
+    const otpauthUri = generateTotpUri(user.email, secret, 'MatrixChat');
+    const qrCodeUrl = await generateQrCodeDataUrl(otpauthUri);
+
+    // Save temporary secret until confirmed by the user
+    await db
+      .update(users)
+      .set({ totpTempSecret: secret })
+      .where(eq(users.id, userId));
+
+    return {
+      secret,
+      qrCodeUrl,
+      otpauthUri,
+      email: user.email,
+    };
+  }
+
+  /**
+   * Verify entered 6-digit code and activate TOTP 2FA
+   */
+  async verifyAndEnableTotp(userId: string, code: string) {
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+
+    if (!user) {
+      throw { status: 404, message: 'User not found.' };
+    }
+
+    if (!user.totpTempSecret) {
+      throw { status: 400, message: 'No 2FA setup in progress. Please start setup again.' };
+    }
+
+    const isValid = verifyTotp(code, user.totpTempSecret);
+    if (!isValid) {
+      throw { status: 400, message: 'Invalid 6-digit authenticator code. Check your app and try again.' };
+    }
+
+    // Activate TOTP
+    await db
+      .update(users)
+      .set({
+        totpSecret: user.totpTempSecret,
+        totpEnabled: true,
+        totpTempSecret: null,
+      })
+      .where(eq(users.id, userId));
+
+    return {
+      success: true,
+      message: 'Two-Factor Authenticator enabled successfully.',
+    };
+  }
+
+  /**
+   * Disable TOTP 2FA
+   */
+  async disableTotp(userId: string) {
+    await db
+      .update(users)
+      .set({
+        totpSecret: null,
+        totpEnabled: false,
+        totpTempSecret: null,
+      })
+      .where(eq(users.id, userId));
+
+    return {
+      success: true,
+      message: 'Two-Factor Authenticator has been disabled.',
+    };
+  }
+
+  /**
+   * Verify TOTP code directly during login
+   */
+  async verifyTotpLogin(params: {
+    email: string;
+    code: string;
+    userAgent?: string;
+    ipAddress?: string;
+  }) {
+    const { code, userAgent = '', ipAddress = '' } = params;
+    const normalizedEmail = normalizeEmail(params.email);
+
+    if (!normalizedEmail) {
+      throw { status: 400, message: 'Please enter a valid email address.' };
+    }
+
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.email, normalizedEmail))
+      .limit(1);
+
+    if (!user || !user.totpEnabled || !user.totpSecret) {
+      throw {
+        status: 400,
+        message: 'Authenticator app is not enabled for this account. Please sign in with an email code.',
+      };
+    }
+
+    const isValid = verifyTotp(code, user.totpSecret);
+    if (!isValid) {
+      throw {
+        status: 400,
+        message: 'Invalid 6-digit authenticator code. Check your Google or Microsoft Authenticator app.',
+      };
+    }
+
+    // Create session
+    const rawSessionToken = generateSessionToken();
+    const tokenHash = hashSessionToken(rawSessionToken);
+    const sessionExpiresAt = new Date(Date.now() + SESSION_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
+
+    await db.insert(sessions).values({
+      userId: user.id,
+      tokenHash,
+      ipAddress,
+      userAgent,
+      expiresAt: sessionExpiresAt,
+    });
+
+    return {
+      user: {
+        id: user.id,
+        email: user.email,
+        displayName: user.displayName,
+        avatarUrl: user.avatarUrl,
+        about: user.about,
+        isOnline: user.isOnline,
+        lastSeenAt: user.lastSeenAt,
+        totpEnabled: true,
+      },
+      rawSessionToken,
+      sessionExpiresAt,
     };
   }
 

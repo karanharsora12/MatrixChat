@@ -98,6 +98,116 @@ export class AuthController {
       res.status(500).json({ error: 'Failed to complete logout.' });
     }
   }
+
+  async checkAuthMethods(req: Request, res: Response) {
+    try {
+      const email = (req.query.email as string) || req.body?.email || '';
+      const result = await authService.checkAuthMethods(email);
+      res.status(200).json(result);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Failed to check authentication methods.' });
+    }
+  }
+
+  async verifyTotp(req: Request, res: Response) {
+    try {
+      const { email, code } = req.body || {};
+      if (!email || !code) {
+        res.status(400).json({ error: 'Email and 6-digit authenticator code are required.' });
+        return;
+      }
+
+      const userAgent = req.headers['user-agent'] || '';
+      const clientIp = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '';
+
+      const { user, rawSessionToken, sessionExpiresAt } = await authService.verifyTotpLogin({
+        email,
+        code,
+        userAgent,
+        ipAddress: clientIp,
+      });
+
+      res.cookie(SESSION_COOKIE_NAME, rawSessionToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        expires: sessionExpiresAt,
+        path: '/',
+      });
+
+      res.status(200).json({
+        success: true,
+        user,
+        token: rawSessionToken,
+      });
+    } catch (err: any) {
+      const status = err.status || 500;
+      res.status(status).json({
+        error: err.message || 'Authenticator verification failed.',
+      });
+    }
+  }
+
+  async setupTotp(req: Request, res: Response) {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        res.status(401).json({ error: 'Unauthorized.' });
+        return;
+      }
+
+      const result = await authService.setupTotp(userId);
+      res.status(200).json(result);
+    } catch (err: any) {
+      const status = err.status || 500;
+      res.status(status).json({
+        error: err.message || 'Failed to initialize Authenticator QR setup.',
+      });
+    }
+  }
+
+  async verifyTotpSetup(req: Request, res: Response) {
+    try {
+      const userId = req.user?.id;
+      const { code } = req.body || {};
+
+      if (!userId) {
+        res.status(401).json({ error: 'Unauthorized.' });
+        return;
+      }
+
+      if (!code) {
+        res.status(400).json({ error: '6-digit authenticator code is required.' });
+        return;
+      }
+
+      const result = await authService.verifyAndEnableTotp(userId, code);
+      res.status(200).json(result);
+    } catch (err: any) {
+      const status = err.status || 500;
+      res.status(status).json({
+        error: err.message || 'Failed to verify and activate Authenticator.',
+      });
+    }
+  }
+
+  async disableTotp(req: Request, res: Response) {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        res.status(401).json({ error: 'Unauthorized.' });
+        return;
+      }
+
+      const result = await authService.disableTotp(userId);
+      res.status(200).json(result);
+    } catch (err: any) {
+      const status = err.status || 500;
+      res.status(status).json({
+        error: err.message || 'Failed to disable Authenticator.',
+      });
+    }
+  }
 }
 
 export const authController = new AuthController();

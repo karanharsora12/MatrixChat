@@ -14,6 +14,7 @@ export interface AuthenticatedUser {
   about: string | null;
   isOnline: boolean;
   lastSeenAt: Date | null;
+  totpEnabled?: boolean;
 }
 
 export interface AuthenticatedSession {
@@ -89,6 +90,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
       about: foundUser.about,
       isOnline: foundUser.isOnline,
       lastSeenAt: foundUser.lastSeenAt,
+      totpEnabled: Boolean(foundUser.totpEnabled),
     };
 
     req.session = {

@@ -96,6 +96,58 @@ class ApiClient {
     return res;
   }
 
+  async checkAuthMethods(email: string) {
+    return this.request<{ exists: boolean; hasTotp: boolean }>(
+      `/auth/check-methods?email=${encodeURIComponent(email)}`
+    );
+  }
+
+  async verifyTotp(email: string, code: string) {
+    const res = await this.request<{
+      success: boolean;
+      user: User;
+      token?: string;
+    }>('/auth/verify-totp', {
+      method: 'POST',
+      body: JSON.stringify({ email, code }),
+    });
+
+    if (res.token) {
+      localStorage.setItem('matrix_session_token', res.token);
+    }
+    return res;
+  }
+
+  async setupTotp() {
+    return this.request<{
+      secret: string;
+      qrCodeUrl: string;
+      otpauthUri: string;
+      email: string;
+    }>('/auth/2fa/setup', {
+      method: 'POST',
+    });
+  }
+
+  async verifyTotpSetup(code: string) {
+    return this.request<{
+      success: boolean;
+      message: string;
+    }>('/auth/2fa/verify', {
+      method: 'POST',
+      body: JSON.stringify({ code }),
+    });
+  }
+
+  async disableTotp() {
+    return this.request<{
+      success: boolean;
+      message: string;
+    }>('/auth/2fa/disable', {
+      method: 'POST',
+    });
+  }
+
   async getSession() {
     return this.request<{ authenticated: boolean; user: User }>('/auth/session', {
       method: 'GET',

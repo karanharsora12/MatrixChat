@@ -27,6 +27,7 @@ interface AuthContextType {
   isLoading: boolean;
   requestOtp: (options: RequestOtpOptions | string) => Promise<RequestOtpResponse>;
   verifyOtp: (options: VerifyOtpOptions | string, otp?: string) => Promise<void>;
+  verifyTotp: (email: string, code: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
@@ -67,6 +68,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     socketService.connect();
   };
 
+  const verifyTotp = async (email: string, code: string) => {
+    const res = await api.verifyTotp(email, code);
+    setUser(res.user);
+    socketService.connect();
+  };
+
   const logout = async () => {
     try {
       await api.logout();
@@ -77,7 +84,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, requestOtp, verifyOtp, logout, refreshUser }}>
+    <AuthContext.Provider
+      value={{ user, isLoading, requestOtp, verifyOtp, verifyTotp, logout, refreshUser }}
+    >
       {children}
     </AuthContext.Provider>
   );

@@ -8,6 +8,7 @@ export interface User {
   about: string | null;
   isOnline: boolean;
   lastSeenAt: string | null;
+  totpEnabled?: boolean;
   createdAt?: string;
   privacySettings?: PrivacySettings;
 }
