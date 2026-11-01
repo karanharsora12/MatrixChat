@@ -89,7 +89,7 @@ export function OtpInput({
   };
 
   return (
-    <div className="flex items-center justify-center gap-2 sm:gap-3">
+    <div className="flex items-center justify-between gap-1.5 sm:gap-2.5 select-none">
       {Array.from({ length }).map((_, index) => (
         <input
           key={index}
@@ -106,12 +106,12 @@ export function OtpInput({
           onKeyDown={(e) => handleKeyDown(e, index)}
           onPaste={handlePaste}
           onFocus={(e) => e.target.select()}
-          className={`w-11 h-14 sm:w-12 sm:h-14 text-center text-2xl font-bold font-mono rounded-xl bg-[#111b21] border transition-all duration-150 select-none ${
+          className={`w-11 h-13 sm:w-12 sm:h-14 text-center text-xl sm:text-2xl font-bold font-mono rounded-xl bg-card border transition-all duration-150 select-none shadow-xs ${
             hasError
-              ? 'border-red-500/70 text-red-300 ring-2 ring-red-500/20'
+              ? 'border-destructive text-destructive ring-2 ring-destructive/20 focus:border-destructive'
               : digits[index]
-              ? 'border-[#00a884] text-[#00a884] ring-2 ring-[#00a884]/20'
-              : 'border-[#2a3942] text-white hover:border-[#3b4a54]'
+              ? 'border-[#00a884] text-[#00a884] bg-[#00a884]/5 ring-2 ring-[#00a884]/20'
+              : 'border-border text-foreground hover:border-border/80'
           } focus:outline-none focus:border-[#00a884] focus:ring-2 focus:ring-[#00a884]/25 disabled:opacity-50 disabled:cursor-not-allowed`}
         />
       ))}
