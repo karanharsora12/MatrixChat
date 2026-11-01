@@ -1,0 +1,40 @@
+# Node dependencies & build artifacts
+node_modules/
+dist/
+build/
+
+# Local environment & secrets
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# Persistent uploads (preserve uploads directory structure, exclude contents)
+uploads/*
+!uploads/.gitkeep
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Git & OS metadata
+.git/
+.gitignore
+.gitattributes
+.DS_Store
+Thumbs.db
+
+# Editor & IDE configs
+.vscode/
+.idea/
+*.sublime-*
+
+# Docker files
+Dockerfile*
+docker-compose*.yml
+.dockerignore
