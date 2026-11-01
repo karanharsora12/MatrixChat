@@ -1,6 +1,7 @@
 import React from 'react';
 import { Conversation } from '../../types';
 import { formatChatListTime } from '../../utils/formatters';
+import { getMediaUrl } from '../../services/api';
 import { Avatar, AvatarImage, AvatarFallback } from '../../components/ui/avatar';
 import { Badge } from '../../components/ui/badge';
 import { Pin, VolumeX, CheckCheck, Check, Image as ImageIcon, FileText } from 'lucide-react';
@@ -56,7 +57,7 @@ export function ChatItem({ conversation, isSelected, onSelect, currentUserId }: 
       {/* Radix Avatar with Online Dot */}
       <div className="relative flex-shrink-0">
         <Avatar className="w-[49px] h-[49px] border-none">
-          {otherUser?.avatarUrl && <AvatarImage src={otherUser.avatarUrl} alt={otherUser.name} />}
+          {otherUser?.avatarUrl && <AvatarImage src={getMediaUrl(otherUser.avatarUrl)} alt={otherUser.name} />}
           <AvatarFallback className="bg-[#00a884]/15 text-[#00a884] font-semibold text-lg">
             {(otherUser?.name || 'M')[0]}
           </AvatarFallback>

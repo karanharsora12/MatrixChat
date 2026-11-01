@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Contact, Conversation } from '../../types';
-import { api } from '../../services/api';
+import { api, getMediaUrl } from '../../services/api';
 import {
   Dialog,
   DialogContent,
@@ -165,7 +165,7 @@ export function NewChatModal({ isOpen, onClose, onSelectConversation }: NewChatM
             <div className="p-3.5 rounded-xl bg-muted/40 border border-border flex items-center justify-between">
               <div className="flex items-center gap-3 min-w-0">
                 <Avatar className="w-12 h-12 border border-border">
-                  {foundUser.avatarUrl && <AvatarImage src={foundUser.avatarUrl} />}
+                  {foundUser.avatarUrl && <AvatarImage src={getMediaUrl(foundUser.avatarUrl)} />}
                   <AvatarFallback className="bg-primary/20 text-primary font-semibold text-base">
                     {(foundUser.displayName || 'U')[0].toUpperCase()}
                   </AvatarFallback>
@@ -225,7 +225,7 @@ export function NewChatModal({ isOpen, onClose, onSelectConversation }: NewChatM
                     >
                       <div className="flex items-center gap-3 min-w-0">
                         <Avatar className="w-9 h-9 border border-border">
-                          {contact.avatarUrl && <AvatarImage src={contact.avatarUrl} />}
+                          {contact.avatarUrl && <AvatarImage src={getMediaUrl(contact.avatarUrl)} />}
                           <AvatarFallback className="text-xs font-semibold">
                             {(contact.name || 'U')[0].toUpperCase()}
                           </AvatarFallback>

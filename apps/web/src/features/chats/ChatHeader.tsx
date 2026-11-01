@@ -1,6 +1,7 @@
 import React from 'react';
 import { Conversation } from '../../types';
 import { formatLastSeen } from '../../utils/formatters';
+import { getMediaUrl } from '../../services/api';
 import { Avatar, AvatarImage, AvatarFallback } from '../../components/ui/avatar';
 import { Button } from '../../components/ui/button';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../../components/ui/tooltip';
@@ -86,7 +87,7 @@ export function ChatHeader({
         >
           <div className="relative">
             <Avatar className="w-[40px] h-[40px] border-none">
-              {otherUser?.avatarUrl && <AvatarImage src={otherUser.avatarUrl} alt={otherUser.name} />}
+              {otherUser?.avatarUrl && <AvatarImage src={getMediaUrl(otherUser.avatarUrl)} alt={otherUser.name} />}
               <AvatarFallback className="bg-[#00a884]/15 text-[#00a884] font-semibold text-sm">
                 {(otherUser?.name || 'M')[0]}
               </AvatarFallback>

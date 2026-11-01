@@ -1,6 +1,22 @@
 import { User, Contact, Conversation, Message, PrivacySettings } from '../types';
 
-const API_BASE = '/api';
+export const BACKEND_URL = import.meta.env.VITE_API_URL;
+
+export const API_BASE = `${BACKEND_URL}/api`;
+
+export function getMediaUrl(path: string | null | undefined): string {
+  if (!path) return '';
+  if (
+    path.startsWith('http://') ||
+    path.startsWith('https://') ||
+    path.startsWith('blob:') ||
+    path.startsWith('data:')
+  ) {
+    return path;
+  }
+  const cleanPath = path.startsWith('/') ? path : `/${path}`;
+  return BACKEND_URL ? `${BACKEND_URL}${cleanPath}` : cleanPath;
+}
 
 class ApiClient {
   private getHeaders(isJson = true): HeadersInit {

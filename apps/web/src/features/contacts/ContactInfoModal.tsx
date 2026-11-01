@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Conversation } from '../../types';
-import { api } from '../../services/api';
+import { api, getMediaUrl } from '../../services/api';
 import { modal } from '../../components/ui/modal';
 import { formatLastSeen } from '../../utils/formatters';
 import {
@@ -93,7 +93,7 @@ export function ContactInfoModal({
           {/* Centered Large Avatar & Contact Name */}
           <div className="flex flex-col items-center text-center">
             <Avatar className="w-24 h-24 border-2 border-border shadow-md mb-3">
-              {otherUser.avatarUrl && <AvatarImage src={otherUser.avatarUrl} alt={otherUser.name} />}
+              {otherUser.avatarUrl && <AvatarImage src={getMediaUrl(otherUser.avatarUrl)} alt={otherUser.name} />}
               <AvatarFallback className="bg-primary/20 text-primary font-bold text-2xl">
                 {(otherUser.name || otherUser.displayName || 'M')[0]}
               </AvatarFallback>

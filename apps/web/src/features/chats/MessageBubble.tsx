@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Message } from '../../types';
 import { formatMessageTime, formatFileSize } from '../../utils/formatters';
+import { getMediaUrl } from '../../services/api';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -390,7 +391,7 @@ export function MessageBubble({
                   className={`cursor-pointer ${isImageOnly ? 'rounded-[8px]' : 'rounded-t-[8px]'}`}
                 >
                   <img
-                    src={message.attachment.filePath}
+                    src={getMediaUrl(message.attachment.filePath)}
                     alt={message.attachment.fileName}
                     className="w-full max-h-[350px] object-cover"
                     loading="lazy"
@@ -414,14 +415,14 @@ export function MessageBubble({
                   <DialogContent className="max-w-4xl p-2 bg-black/90 border-none backdrop-blur-2xl">
                     <div className="flex flex-col items-center justify-center">
                       <img
-                        src={message.attachment.filePath}
+                        src={getMediaUrl(message.attachment.filePath)}
                         alt={message.attachment.fileName}
                         className="w-full max-h-[82vh] object-contain rounded-lg"
                       />
                       <div className="flex items-center justify-between w-full mt-2 px-2 text-white/80 text-xs">
                         <span>{message.attachment.fileName}</span>
                         <a
-                          href={message.attachment.filePath}
+                          href={getMediaUrl(message.attachment.filePath)}
                           download={message.attachment.fileName}
                           className="flex items-center gap-1 hover:text-white transition-colors"
                         >
@@ -479,7 +480,7 @@ export function MessageBubble({
             ) : (
               <div className="m-1">
                 <a
-                  href={message.attachment.filePath}
+                  href={getMediaUrl(message.attachment.filePath)}
                   download={message.attachment.fileName}
                   target="_blank"
                   rel="noreferrer"

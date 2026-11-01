@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { User, PrivacySettings } from '../../types';
-import { api } from '../../services/api';
+import { api, getMediaUrl } from '../../services/api';
 import {
   Dialog,
   DialogContent,
@@ -140,7 +140,7 @@ export function ProfileModal({ isOpen, onClose, currentUser, onUserUpdated }: Pr
                 {/* Avatar Display */}
                 <div className="flex flex-col items-center mb-2">
                   <Avatar className="w-20 h-20 border-2 border-[#00a884] mb-3 shadow-md">
-                    {avatarUrl && <AvatarImage src={avatarUrl} />}
+                    {avatarUrl && <AvatarImage src={getMediaUrl(avatarUrl)} />}
                     <AvatarFallback className="text-2xl font-bold bg-primary/20 text-primary">
                       {(displayName || 'U')[0]}
                     </AvatarFallback>

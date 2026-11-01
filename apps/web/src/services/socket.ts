@@ -1,4 +1,5 @@
 import { io, Socket } from 'socket.io-client';
+import { BACKEND_URL } from './api';
 
 class SocketService {
   private socket: Socket | null = null;
@@ -8,9 +9,8 @@ class SocketService {
     if (this.socket?.connected) return this.socket;
 
     const token = localStorage.getItem('matrix_session_token');
-    const serverUrl = window.location.port === '5173' ? 'http://localhost:5000' : '/';
 
-    this.socket = io(serverUrl, {
+    this.socket = io(BACKEND_URL, {
       withCredentials: true,
       auth: { token },
       transports: ['websocket', 'polling'],

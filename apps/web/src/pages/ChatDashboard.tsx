@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../hooks/useTheme';
 import { Conversation, Message } from '../types';
-import { api } from '../services/api';
+import { api, getMediaUrl } from '../services/api';
 import { socketService } from '../services/socket';
 import { formatDateDivider } from '../utils/formatters';
 import { ChatList } from '../features/chats/ChatList';
@@ -456,7 +456,7 @@ export function ChatDashboard() {
             className="flex items-center gap-3 cursor-pointer group"
           >
             <Avatar className="w-10 h-10 border-none group-hover:ring-2 group-hover:ring-[#00a884]/50 transition-all duration-200">
-              {user?.avatarUrl && <AvatarImage src={user.avatarUrl} />}
+              {user?.avatarUrl && <AvatarImage src={getMediaUrl(user.avatarUrl)} />}
               <AvatarFallback className="bg-[#00a884]/15 text-[#00a884] font-semibold text-sm">
                 {(user?.displayName || 'U')[0]}
               </AvatarFallback>
